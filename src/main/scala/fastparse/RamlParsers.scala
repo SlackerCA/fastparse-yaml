@@ -31,7 +31,7 @@ object Main extends App {
 
 }
 
-object  Raml extends YamlParsers {
+class RamlParser extends YamlParser {
 
   def apply(in: String): String = {
     // map(p:Parser) = map_entry.map(p).seq.!
