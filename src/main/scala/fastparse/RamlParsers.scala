@@ -2,7 +2,8 @@ package fastparse.yaml
 
 import fastparse.all._
 
-object Main extends App {
+object Main //extends App
+{
 //  val char(c:Char):Boolean = List(('\u0009','\u0085'),('\u0020' to '\u007E'),('\u00A0' to '\uD7FF'),('\uE000' to '\uFFFD')).forAll(_.contains(c))
   //('\u0021' to '\u007E').diff("-?:,[]{}#&*!|>'\"%@`")//.foreach(print)
 
@@ -28,12 +29,12 @@ object Main extends App {
     case Parsed.Success(x, _) => "Success:" + x
     case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
   })
-
 }
 
-class RamlParser extends YamlParser {
+class RamlParser {
 
   def apply(in: String): String = {
+    import YamlParser._
     // map(p:Parser) = map_entry.map(p).seq.!
     //val p = map(("title",scalar title_),
     // 
