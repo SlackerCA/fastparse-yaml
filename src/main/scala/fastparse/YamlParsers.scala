@@ -67,6 +67,14 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   // c-printable - b-line-feed - b-carriage-return - c-byte-order-mark - s-space - s-tab
   val ns_char = P(CharIn(('\u0021' to '\u007E'), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD')))
 
+  // [35]	ns-dec-digit	::=	[#x30-#x39] /* 0-9 */
+  // [36]	ns-hex-digit	::=	  ns-dec-digit | [#x41-#x46] /* A-F */ | [#x61-#x66] /* a-f */
+  // [37]	ns-ascii-letter	::=	[#x41-#x5A] /* A-Z */ | [#x61-#x7A] /* a-z */
+  // [38]	ns-word-char	::=	ns-dec-digit | ns-ascii-letter | “-”
+  // [39]	ns-uri-char	::=	“%” ns-hex-digit ns-hex-digit | ns-word-char | “#” | “;” | “/” | “?” | “:” | “@” | “&” | “=” | “+” | “$” | “,” | “_” | “.” | “!” | “~” | “*” | “'” | “(” | “)” | “[” | “]”
+  // [40]	ns-tag-char	::=	ns-uri-char - “!” - c-flow-indicator
+  // [41]	c-escape	::=	“\”
+  // 42..61 YAML escape sequences are a superset of C’s escape sequences:
   // [62]       c-ns-esc-char   ::=     “\” /* followed by one of ns-esc-* */
   private val ns_esc_map = Map(
     "\\0" -> '\u0000',
@@ -105,6 +113,9 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   }))
   
 
+  // [70]	l-empty(n,c)	::=	( s-line-prefix(n,c) | s-indent(<n) ) b-as-line-feed
+  val l_empty = P((( s_line_prefix | s_indent_lt) ) ~ b_as_line_feed))
+
   // [75]       c-nb-comment-text       ::=     “#” nb-char*
   // [76]               b-comment       ::=     b-non-content | /* End of file */
   // [77]             s-b-comment       ::=     ( s-separate-in-line c-nb-comment-text? )? b-comment
@@ -127,7 +138,7 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   // [107]            nb-double-char    ::=     c-ns-esc-char | ( nb-json - “\” - “"” )
   // [108]            ns-double-char    ::=     nb-double-char - s-white
   val nb_double_char = P( c_ns_esc_char | ( !(CharIn("\\-\"")) ~ nb_json  ) )
-  val ns_double_char = P( !(s_white) ~ nb_double_char )
+  val ns_double_char = P( !(s_white) ~ nb_double_char.! )
 
   // [109]      c-double-quoted(n,c)    ::=     “"” nb-double-text(n,c) “"”
   // [110]      nb-double-text(n,c)     ::=     c = flow-out  ⇒ nb-double-multi-line(n)
@@ -141,13 +152,13 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   // [112]      s-double-escaped(n)     ::=     s-white* “\” b-non-content l-empty(n,flow-in)* s-flow-line-prefix(n)
   // [113]      s-double-break(n)       ::=     s-double-escaped(n) | s-flow-folded(n)
   val s_double_escaped = Fail //TODO
-  val s_double_break = Fail //TODO
+  val s_double_break = P("TODO") //TODO
 
   // [114]      nb-ns-double-in-line    ::=     ( s-white* ns-double-char )*
   // [115]      s-double-next-line(n)   ::=     s-double-break(n) ( ns-double-char nb-ns-double-in-line ( s-double-next-line(n) | s-white* ) )?
   // [116]      nb-double-multi-line(n) ::=     nb-ns-double-in-line ( s-double-next-line(n) | s-white* )
   val nb_ns_double_in_line = P(( s_white.rep ~ ns_double_char).rep)
-  val s_double_next_line:Parser[String] = P(s_double_break ~ ( ns_double_char ~ nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ) ).?)
+  val s_double_next_line:Parser[String] = P(s_double_break ~ ( ns_double_char ~ nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ) ).?.!)
   val nb_double_multi_line = P(nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ))
 
   val nb_double_text = P(Pass.flatMap(unit => this.context match {
