@@ -17,18 +17,6 @@ private object FlowKey extends Context
   */
 //TODO: move indentation aware parsers to subclass
 class YamlParser private (private val indentation:Int, private val context:Context) {
-
-  // [75]       c-nb-comment-text       ::=     “#” nb-char*
-  // [76]               b-comment       ::=     b-non-content | /* End of file */
-  // [77]             s-b-comment       ::=     ( s-separate-in-line c-nb-comment-text? )? b-comment
-  // ends a line in non scalar context 
-  val s_b_comment = P(((Start|s_white.rep(1)) ~ "#" ~ nb_char.rep).? ~ (b_break|End))
-  // [78]               l-comment       ::=     s-separate-in-line c-nb-comment-text? b-comment
-  val l_comment = P((Start|s_white.rep(1)) ~ ("#" ~ nb_char.rep).? ~ (b_break|End))
-  // [79]            s-l-comments       ::=     ( s-b-comment | /* Start of line */ ) l-comment*
-  val s_l_comments = P((s_b_comment|Start) ~ l_comment.rep)
-
-
   // [96]       c-ns-properties(n,c)    ::=       ( c-ns-tag-property ( s-separate(n,c) c-ns-anchor-property )? ) | ( c-ns-anchor-property ( s-separate(n,c) c-ns-tag-property )? )
   //TODO: implment node properties
   //val c_ns_properties = P( ( c_ns_tag_property ~ ( s_separate ~ c_ns_anchor_property )? ) | ( c_ns_anchor_property ~ ( s_separate c_ns_tag_property )? ) )
@@ -40,7 +28,7 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   // [107]            nb-double-char    ::=     c-ns-esc-char | ( nb-json - “\” - “"” )
   // [108]            ns-double-char    ::=     nb-double-char - s-white
   val nb_double_char = P( c_ns_esc_char | ( !(CharIn("\\-\"")) ~ nb_json  ) )
-  val ns_double_char = P( !(s_white) ~ nb_double_char )
+  val ns_double_char = P( !(s_white) ~ nb_double_char.! )
 
   // [109]      c-double-quoted(n,c)    ::=     “"” nb-double-text(n,c) “"”
   // [110]      nb-double-text(n,c)     ::=     c = flow-out  ⇒ nb-double-multi-line(n)
@@ -54,13 +42,13 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   // [112]      s-double-escaped(n)     ::=     s-white* “\” b-non-content l-empty(n,flow-in)* s-flow-line-prefix(n)
   // [113]      s-double-break(n)       ::=     s-double-escaped(n) | s-flow-folded(n)
   val s_double_escaped = Fail //TODO
-  val s_double_break = Fail //TODO
+  val s_double_break = P("TODO") //TODO
 
   // [114]      nb-ns-double-in-line    ::=     ( s-white* ns-double-char )*
   // [115]      s-double-next-line(n)   ::=     s-double-break(n) ( ns-double-char nb-ns-double-in-line ( s-double-next-line(n) | s-white* ) )?
   // [116]      nb-double-multi-line(n) ::=     nb-ns-double-in-line ( s-double-next-line(n) | s-white* )
   val nb_ns_double_in_line = P(( s_white.rep ~ ns_double_char).rep)
-  val s_double_next_line:Parser[String] = P(s_double_break ~ ( ns_double_char ~ nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ) ).?)
+  val s_double_next_line:Parser[String] = P(s_double_break ~ ( ns_double_char ~ nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ) ).?.!)
   val nb_double_multi_line = P(nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ))
 
   val nb_double_text = P(Pass.flatMap(unit => this.context match {
