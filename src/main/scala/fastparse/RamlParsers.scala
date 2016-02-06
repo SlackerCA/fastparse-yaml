@@ -30,7 +30,7 @@ object Main //extends App
     case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
   })
 }
-
+/*
 class RamlParser {
 
   def apply(in: String): String = {
@@ -47,7 +47,7 @@ class RamlParser {
       case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
     }
   }
-
+ */
   //def resource = map( ( P(""), )
   // map: if key parser succeeds then value parser
   // seq: use (x|y|z).rep
@@ -86,9 +86,9 @@ match
     nodes match {
       case Scalar("description",v) => 
     }
-  */
-}
 
+}
+  */
 class Resource
 class Type
 

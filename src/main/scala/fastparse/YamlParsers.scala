@@ -5,22 +5,22 @@ import fastparse.all._
 trait Context {
   def apply(indentation:Int):YamlParser = YamlParser(indentation,this)
 }
-private object BlockOut extends Context 
-private object BlockIn extends Context
-private object FlowOut extends Context
-private object FlowIn extends Context
-private object BlockKey extends Context
-private object FlowKey extends Context
+object BlockOut extends Context 
+object BlockIn extends Context
+object FlowOut extends Context
+object FlowIn extends Context
+object BlockKey extends Context
+object FlowKey extends Context
 
 class Chomping
-private object Strip extends Chomping
-private object Clip extends Chomping
-private object Keep extends Chomping
+object Strip extends Chomping
+object Clip extends Chomping
+object Keep extends Chomping
 
 /** 
  * No UTF-32 support.
  * @see http://www.yaml.org/spec/1.2/spec.html
-  */
+ */
 //TODO: move indentation aware parsers to YamlParser class
 class YamlParser private (private val indentation:Int, private val context:Context) {
   import YamlParsers._
@@ -210,16 +210,29 @@ class YamlParser private (private val indentation:Int, private val context:Conte
 
   //[163]   c-indentation-indicator(m)         ::= ns-dec-digit ⇒ m = ns-dec-digit - #x30
   //                                               /* Empty */  ⇒ m = auto-detect()
-  val c_indentation_indicator:Parser[Int] = CharIn("123456789").!.map(Integer.parseInt)
+  val c_indentation_indicator:Parser[Option[Int]] = (CharIn("123456789").!.map(Integer.parseInt).?)
   //[164]   c-chomping-indicator(t)            ::= "-"         ⇒ t = strip
   //                                               "+"         ⇒ t = keep
   //                                               /* Empty */ ⇒ t = clip
-  val c_chomping_indicator:Parser[Chomping] = P("-").map(_=>Strip) | P("+").map(_=>Keep) | Pass.map(_=>Clip) //TODO: could this be made clearer using match?
+  //val c_chomping_indicator:Parser[Option[Chomping]] = ("-" | "+").!.map(case "-" => Strip; case "+" => Keep).?
+  val c_chomping_indicator:Parser[Chomping] = ("-" | "+").!.?
+
   //[162]   c-b-block-header(m,t)              ::= ( ( c-indentation-indicator(m) c-chomping-indicator(t) ) | ( c-chomping-indicator(t) c-indentation-indicator(m) ) ) s-b-comment
-  val c_b_block_header:Parser[BlockScalar] = (( ( c_indentation_indicator.? ~ c_chomping_indicator ) | ( c_chomping_indicator ~ c_indentation_indicator.? ) ) ~ s_b_comment)
-                                                .map { case (i:Integer, c:Chomping)  => BlockScalar(indentation+i,c)
-                                                       case (c:Chomping, i:Integer)  => BlockScalar(indentation+i,c)}
-                                                  
+  private val blockScalarIndent:Parser[Int] = P(&((s_space.rep ~ b_non_content).rep ~ s_space.!.rep(indentation+1).map(_.length) ~ nb_char))
+  private val blockScalar = (t:(Option[String], Option[Int])) => {
+    val partial = t._1 match {
+      case Some("-") => BlockScalar(Strip)
+      case Some("+") => BlockScalar(Keep)
+      case None[String] => BlockScalar(Case)
+    }
+    t._2.map(partial).getOrElse(blockScalarIndent.flatMap(partial))
+  }
+  val c_b_block_header:Parser[BlockScalar] =
+    ( ( ( c_indentation_indicator ~ c_chomping_indicator ).map(_.swap)
+      | ( c_chomping_indicator ~ c_indentation_indicator ) )
+      ~ s_b_comment ).flatMap(blockScalar)
+    
+
   //[170]   c-l+literal(n)                     ::= "|" c-b-block-header(m,t) l-literal-content(n+m,t)
   val c_l_literal = "|" ~ c_b_block_header.flatMap(_.l_literal_content)
   //[174]   c-l+folded(n)                      ::= ">" c-b-block-header(m,t) l-folded-content(n+m,t)
@@ -227,8 +240,8 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   //TODO: l_literal_content(n+m) 
 
 
-//[183]   l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-val l_block_sequence = ( s_indent(n+m) ~ c_l_block_seq_entry(n+m) ).rep(1) /* For some fixed auto_detected ~ m > 0 */
+  //[183]   l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
+  val l_block_sequence = ( s_indent(n+m) ~ c_l_block_seq_entry(n+m) ).rep(1)
 
   //[184]   c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
   val c_l_block_seq_entry = "-" ~ !(ns_char) ~/ s_l_block_indented(BlockIn)
@@ -269,7 +282,7 @@ val l_block_sequence = ( s_indent(n+m) ~ c_l_block_seq_entry(n+m) ).rep(1) /* Fo
   val s_l_block_in_block = s_l_block_scalar | s_l_block_collection
   //[199]   s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
   val s_l_block_scalar_pre = s_separate ~ ( c_ns_properties ~ s_separate ).?
-  val s_l_block_scalar = Pass.flatMap(Unit=>Y(indentation+1).s_l_block_scalar_pre) ~ ( c_l_literal | c_l_folded )
+  val s_l_block_scalar:Parser[String] = Pass.flatMap(Unit=>Y(indentation+1).s_l_block_scalar_pre) ~ ( c_l_literal | c_l_folded )
   //[200]   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
   val s_l_block_collection_properties_impl = (( s_separate ~ c_ns_properties ).?)
   val s_l_block_collection_properties = Pass.flatMap(Unit=>Y(indentation+1).s_l_block_collection_properties_impl)
@@ -289,7 +302,8 @@ object YamlParser {
 
 object YamlParsers {
   //TODO: BlockScalar instance caching
-  private def BlockScalar(indentation:Int, chomping:Chomping) = new BlockScalar(indentation,chomping)
+  def BlockScalar(chomping:Chomping)(indentation:Int) = new BlockScalar(chomping,indentation)
+  def BlockScalar(chomping:Chomping, indentation:Int) = new BlockScalar(chomping,indentation)
 
   //[1]     c-printable                        ::= #x9 | #xA | #xD | [#x20-#x7E] /* 8 bit */ | #x85 | [#xA0-#xD7FF] | [#xE000-#xFFFD] /* 16 bit */ | [#x10000-#x10FFFF] /* 32 bit */
   val c_printable = P(CharIn(List('\u0009','\u000A','\u000D','\u0085'), ('\u0020' to '\u007E'), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD')))
@@ -557,11 +571,12 @@ val c_reserved = "@" | "`"
 }
 
 //TODO: BlockScalar move to outer class
-class BlockScalar(val indentation:Int, val chomping:Chomping) {
+class BlockScalar(val chomping:Chomping, val indentation:Int) {
   import YamlParsers._
-  val Y = YamlParser(indentation,BlockIn)
-  //val l_empty_Block = s_space.rep(max=indentation) ~ b_non_content
-  val l_empty_rep = (s_space.rep(max=indentation) ~ b_non_content).rep
+  //val Y = YamlParser(indentation,BlockIn)
+  val s_indent = s_space.rep(min=indentation,max=indentation)
+  val l_empty_Block = s_space.rep(max=indentation) ~ b_non_content
+  val l_empty_rep = l_empty_Block.rep
   val b_l_folded_Block = ((b_non_content ~ l_empty_Block.rep(1)) | b_as_space)
 
   //[64]    s-indent(<n)                       ::= s-space × m /* Where m < n */
@@ -594,18 +609,20 @@ class BlockScalar(val indentation:Int, val chomping:Chomping) {
   }
 
   //[171]   l-nb-literal-text(n)               ::= l-empty(n,block-in)* s-indent(n) nb-char+
-  val l_nb_literal_text =  l_empty_rep ~ Y.s_indent ~ nb_char.rep(1)
+  val l_nb_literal_text =  l_empty_rep ~ s_indent ~ nb_char.rep(1)
+  // (space{0,n}\n)* space{n}[^\n\r]+
+  // 
   //[172]   b-nb-literal-next(n)               ::= b-as-line-feed l-nb-literal-text(n)
   val b_nb_literal_next = b_as_line_feed ~ l_nb_literal_text
   //[173]   l-literal-content(n,t)             ::= ( l-nb-literal-text(n) b-nb-literal-next(n)* b-chomped-last(t) )? l-chomped-empty(n,t)
   val l_literal_content = ( l_nb_literal_text ~ b_nb_literal_next.rep ~ b_chomped_last ).? ~ l_chomped_empty
 
   //[175]   s-nb-folded-text(n)                ::= s-indent(n) ns-char nb-char*
-  val s_nb_folded_text = Y.s_indent ~ ns_char ~ nb_char.rep
+  val s_nb_folded_text = s_indent ~ ns_char ~ nb_char.rep
   //[176]   l-nb-folded-lines(n)               ::= s-nb-folded-text(n) ( b-l-folded(n,block-in) s-nb-folded-text(n) )*
   val l_nb_folded_lines = s_nb_folded_text ~ ( b_l_folded_Block ~ s_nb_folded_text ).rep
   //[177]   s-nb-spaced-text(n)                ::= s-indent(n) s-white nb-char*
-  val s_nb_spaced_text = Y.s_indent ~ s_white ~ nb_char.rep
+  val s_nb_spaced_text = s_indent ~ s_white ~ nb_char.rep
   //[178]   b-l-spaced(n)                      ::= b-as-line-feed l-empty(n,block-in)*
   val b_l_spaced = b_as_line_feed ~ l_empty_rep
   //[179]   l-nb-spaced-lines(n)               ::= s-nb-spaced-text(n) ( b-l-spaced(n) s-nb-spaced-text(n) )*
