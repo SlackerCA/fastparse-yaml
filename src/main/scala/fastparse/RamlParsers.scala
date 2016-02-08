@@ -88,14 +88,38 @@ match
     }
 
 }
+
+read YAML into structre
+Raml( //map
+ title: String //scalar
+ 
+)
+
+push
+ register Listener scalar(s:label),map_start(s:label),map_end,seq_start(s:label),seq_end,
+ these methods return 
+pull 
+ call .get(pull:Map[String,Parser]) since order doesn't matter
+ .get(keys:Set[Parser[_]]) => (key:String, p:Parser)
+ 
+val r:Raml // mutible
+val raml = (title | description | resources).rep
+val title = entry("title",scalar.!).map(r.title = _)
+val description = entry("description",scalar.!).map(r.description_)
+val types = entry("types",type.!).map(r.types_)
+
+entry = scalar("title") ~ scalar.!
+
+AST
+
   */
 class Resource
 class Type
 
-class Raml (
+class Raml {
   title: String,
   description: String,
   resources: List[Resource],
   types: List[Type]
-)
+}
 

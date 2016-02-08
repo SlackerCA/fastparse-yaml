@@ -18,3 +18,4 @@ case class Peek[T](p: Parser[T]) extends Parser[T]{
   }
   override def toString = s"Peek($p)"
 }
+
