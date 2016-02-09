@@ -102,15 +102,22 @@ pull
  call .get(pull:Map[String,Parser]) since order doesn't matter
  .get(keys:Set[Parser[_]]) => (key:String, p:Parser)
  
-val r:Raml // mutible
+val r:Raml
 val raml = (title | description | resources).rep
 val title = entry("title",scalar.!).map(r.title = _)
 val description = entry("description",scalar.!).map(r.description_)
 val types = entry("types",type.!).map(r.types_)
 
-entry = scalar("title") ~ scalar.!
+Yaml (
+ map(
+ k -> string.map(),
+ sk -> list ( a|b|c )
+ s2 -> list ( a,b,c )
+ ).map(Map[K,V]=>T):T
+)
 
-AST
+
+ 
 
   */
 class Resource

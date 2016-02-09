@@ -3,100 +3,191 @@ package fastparse.yaml
 import fastparse.all._
 
 object Yaml {
-  // l-bare-document                    ::= s-l+block-node(-1,block-in)
+  // l-bare-document                    ::= s-l+block-node(-1,block-in) /* Excluding c-forbidden content */
 
-  // s-l+block-indented(block-in)         -> ( ns-l-compact-sequence | ns-l-compact-mapping) | s-l+block-node(block-in) | e-node
-  // s-l+block-indented(block-out)        -> ( ns-l-compact-sequence | ns-l-compact-mapping) | s-l+block-node(block-out) | e-node
+  def seq(nodes:Seq[Node[T]]):SeqNode[T]
+  def map(nodes:Map[Node[K],Node[V]]):MapNode[K,V]
+  def string(text:String):ScalarNode[String] = new ScalarNode(text)
+}
 
-  // c => block-in | block-out
+abstract class Node[T]  {
+  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  def block_indented(n:Int,c:Context):Parser[T]
+
   // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
   //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
   //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
+  def block_node(n:Int,c:Context):Parser[T]
 
-
-  // c => -in | flow-out
   // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  def flow_node(n:Int,c:Context):Parser[T]
 
   // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
+  def flow_json_content(n:Int,c:Context):Parser[T]
+}
 
-  // ^^ complete ^^
+class MapNode[K,V] (
+  val nodes:Map[Node[K],Node[V]]
+) extends Node[Map[T]] {
+  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  override def block_indented(n:Int,c:Context):Parser[T]
 
-  // used 2x in mapping, so maybe move there
+  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
+  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
+  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
+  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
+  override def block_node(n:Int,c:Context):Parser[T]
+
+  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
+  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  override def flow_node(n:Int,c:Context):Parser[T]
+
+  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
+  override def flow_json_content(n:Int,c:Context):Parser[T]
+
+
+
+  // l+block-mapping(n)                 ::= ( s-indent(n+m) ns-l-block-map-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
+  private def block_mapping(n:Int)
+
+  // ns-l-compact-mapping(n)            -> ns-l-block-map-entry(n)+
+  //  ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
+  //   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
+  //    c-l-block-map-explicit-key(n)      ::= "?" s-l+block-indented(n,block-out)
+  //    l-block-map-explicit-value(n)      ::= s-indent(n) ":" s-l+block-indented(n,block-out)
+  //   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
+  //    ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
+  //     c-s-implicit-json-key(c)           ::= c-flow-json-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
+  //     ns-s-implicit-yaml-key(c)          ::= ns-flow-yaml-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
+  //    c-l-block-map-implicit-value(n)    ::= ":" ( s-l+block-node(n,block-out) | ( e-node s-l-comments ) )
+  private def compact_mapping(n:Int)
+
+  // ns-flow-pair(n,c)                  ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
+  //  ns-flow-map-explicit-entry(n,c)    ::= ns-flow-map-implicit-entry(n,c) | ( e-node /* Key */ e-node /* Value */ )
+  //   ns-flow-map-implicit-entry(n,c)    ::= ns-flow-map-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-map-json-key-entry(n,c)
+  //    ns-flow-map-yaml-key-entry(n,c)    ::= ns-flow-yaml-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-separate-value(n,c) ) | e-node )
+  //     c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
+  //    c-ns-flow-map-empty-key-entry(n,c) ::= e-node /* Key */ c-ns-flow-map-separate-value(n,c)
+  //    c-ns-flow-map-json-key-entry(n,c)  ::= c-flow-json-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-adjacent-value(n,c) ) | e-node )
+  //     c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
+  //  ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
+  //   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
+  //   c-ns-flow-pair-json-key-entry(n,c) ::= c-s-implicit-json-key(flow-key) c-ns-flow-map-adjacent-value(n,c)
+  //    c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
+  private def flow_pair(n:Int,c:Context)
+
+  // c-flow-mapping(n,c)                ::= "{" s-separate(n,c)? ns-s-flow-map-entries(n,in-flow(c))? "}"
+  //  ns-s-flow-map-entries(n,c)         ::= ns-flow-map-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-map-entries(n,c)? )?
+  //   ns-flow-map-entry(n,c)             ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-map-implicit-entry(n,c)
+  private def flow_mapping(n:Int,c:Context)
+
   // c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
-
-  def sequence(entry:Parser[K]): Parser[K] {
-    // l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-    //  c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
-
-    // ns-l-compact-sequence                -> c-l-block-seq-entry+
-
-    // c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
-    //  ns-s-flow-seq-entries(n,c)         -> ns-flow-seq-entry(n,c)+
-    //   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
-
-    // ^^ complete ^^
-  }
-
-  def mapping(key:Parser[K],value:Parser[V]): Parser[(K,V)] {
-    // l+block-mapping(n)                 ::= ( s-indent(n+m) ns-l-block-map-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-
-    // ns-l-compact-mapping               -> ns-l-block-map-entry+
-    //  ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
-    //   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
-    //    c-l-block-map-explicit-key(n)      ::= "?" s-l+block-indented(n,block-out)
-    //    l-block-map-explicit-value(n)      ::= s-indent(n) ":" s-l+block-indented(n,block-out)
-    //   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
-    //    ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
-    //     c-s-implicit-json-key(c)           ::= c-flow-json-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-    //     ns-s-implicit-yaml-key(c)          ::= ns-flow-yaml-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-    //    c-l-block-map-implicit-value(n)    ::= ":" ( s-l+block-node(n,block-out) | ( e-node s-l-comments ) )
-
-    // ns-flow-pair(n,c)                  ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
-    //  ns-flow-map-explicit-entry(n,c)    ::= ns-flow-map-implicit-entry(n,c) | ( e-node /* Key */ e-node /* Value */ )
-    //   ns-flow-map-implicit-entry(n,c)    ::= ns-flow-map-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-map-json-key-entry(n,c)
-    //    ns-flow-map-yaml-key-entry(n,c)    ::= ns-flow-yaml-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-separate-value(n,c) ) | e-node )
-    //     c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
-    //    c-ns-flow-map-empty-key-entry(n,c) ::= e-node /* Key */ c-ns-flow-map-separate-value(n,c)
-    //    c-ns-flow-map-json-key-entry(n,c)  ::= c-flow-json-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-adjacent-value(n,c) ) | e-node )
-    //     c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
-    //  ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
-    //   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
-    //   c-ns-flow-pair-json-key-entry(n,c) ::= c-s-implicit-json-key(flow-key) c-ns-flow-map-adjacent-value(n,c)
-    //    c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
-
-    // c-flow-mapping(n,c)                ::= "{" s-separate(n,c)? ns-s-flow-map-entries(n,in-flow(c))? "}"
-    //  ns-s-flow-map-entries(n,c)         ::= ns-flow-map-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-map-entries(n,c)? )?
-    //   ns-flow-map-entry(n,c)             ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-map-implicit-entry(n,c)
-
-    // ^^ complete ^^
-  }
-
-  def scalar:YamlParser[String] = {
-    // c => block-in | block-out
-    // s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
-
-    // ns-flow-yaml-content(n,c)          ::= ns-plain(n,c)
-
-    // ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
-
-    // c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
-
-    // c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
-  }
+  private def flow_json_node(n:Int,c:Context)
+  // ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
+  private def flow_yaml_node(n:Int,c:Context)
 }
 
-  // Yaml
-  // mapping( "title" -> scalar.map(title_ _), 
-  //          "types" -> mapping(typesMapping).map(types_ _)
-  //           scalar.seq -> scalar.seq.map(_),
-  // .parse(_)
+class SeqNode[T] (
+  val nodes:Seq[Node[T]]
+) extends Node[Seq[T]]
+{
+  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  override def block_indented(n:Int,c:Context):Parser[Seq[T]] = compact_sequence(n,c) | block_node(n,c)
+
+  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
+  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
+  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
+  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
+  override def block_node(n:Int,c:Context):Parser[Seq[T]] = {
+    (( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) ))
+    | (s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments)
+  }
+
+  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
+  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  override def flow_node(n:Int,c:Context):Parser[Seq[T]]
+
+  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
+  override def flow_json_content(n:Int,c:Context):Parser[Seq[T]]
+
+  //[186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
+  private def compact_sequence(n:Int):Parser[Seq[T]] = {
+
+  }
+
+  // c => block-in | block-out
+  // l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
+  //  c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
+  private def block_sequence(n:Int):Parser[Seq[T]] = {
+    /* For some fixed auto-detected m > 0 */
+    nodes.map( s_indent(n+m) "-" ~ !(ns_char) ~/ _.block_indented(BlockIn) )
+  }
+
+  // c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
+  //  ns-s-flow-seq-entries(n,c)         ::= ns-flow-seq-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-seq-entries(n,c)? )?
+  //   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
+  private def flow_sequence(n:Int,c:Context):Parser[Seq[T]]
+
+
+}
+class ScalarNode[T] (
+  val text:String
+) extends Node[T] {
+  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  override def block_indented(n:Int,c:Context):Parser[T]
+
+  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
+  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
+  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
+  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
+  override def block_node(n:Int,c:Context):Parser[T]
+
+  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
+  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  override def flow_node(n:Int,c:Context):Parser[T]
+
+  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
+  override def flow_json_content(n:Int,c:Context):Parser[T]
+
+  // s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
+  private def block_scalar(n:Int,c:Context):Parser[T] = {
+    s_separate(n+1,c) ( c_ns_properties(n+1,c) s_separate(n+1,c) ).? ( c_l_literal(n).! | c_l_folded(n).! ).filter(_==text)
+  }
+
+  // ns-flow-yaml-content(n,c)          ::= ns-plain(n,c)
+  private def flow_yaml_content(n:Int,c:Context):Parser[T]
+  // c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
+  private def single_quoted(n:Int,c:Context):Parser[T]
+  // c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
+  private def double_quoted(n:Int,c:Context):Parser[T]
 }
 
-trait Context {
-  //def apply(indentation:Int):YamlParser = YamlParser(indentation,this)
+
+class EitherNode[T] (
+  val nodes:Seq[Node[T]]
+) extends Node[T]  {
+  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  def block_indented(n:Int,c:Context):Parser[T]
+
+  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
+  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
+  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
+  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
+  def block_node(n:Int,c:Context):Parser[T]
+
+  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
+  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  def flow_node(n:Int,c:Context):Parser[T]
+
+  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
+  def flow_json_content(n:Int,c:Context):Parser[T]
 }
+
+
+
+trait Context
 object BlockOut extends Context 
 object BlockIn extends Context
 object FlowOut extends Context
@@ -113,7 +204,7 @@ object Keep extends Chomping
  * No UTF-32 support.
  * @see http://www.yaml.org/spec/1.2/spec.html
  */
-//TODO: move indentation aware parsers to YamlParser class
+
 class YamlParser private (private val indentation:Int, private val context:Context) {
   import YamlParsers._
   private def Y(indentation:Int, context:Context) = YamlParser(indentation,context)
@@ -176,7 +267,7 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   val c_ns_properties = ( c_ns_tag_property ~ ( s_separate ~ c_ns_anchor_property ).? ) | ( c_ns_anchor_property ~ ( s_separate ~ c_ns_tag_property ).? )
 
   //[109]   c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
-  val c_double_quoted = "\"" ~/ nb_double_text ~ "\""
+  val c_double_quoted:Parser[String] = "\"" ~/ nb_double_text.! ~ "\""
   //[110]   nb-double-text(n,c)                ::= c = flow-out  ⇒ nb-double-multi-line(n)
   //                                               c = flow-in   ⇒ nb-double-multi-line(n)
   //                                               c = block-key ⇒ nb-double-one-line
@@ -197,7 +288,7 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   //[116]   nb-double-multi-line(n)            ::= nb-ns-double-in-line ( s-double-next-line(n) | s-white* )
   val nb_double_multi_line = nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep )
   //[120]   c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
-  val c_single_quoted = "'" ~/ nb_single_text ~ "'"
+  val c_single_quoted:Parser[String] = "'" ~/ nb_single_text.! ~ "'"
   //[121]   nb-single-text(n,c)                ::= c = flow-out  ⇒ nb-single-multi-line(n)
   //                                               c = flow-in   ⇒ nb-single-multi-line(n)
   //                                               c = block-key ⇒ nb-single-one-line
@@ -599,7 +690,7 @@ val c_reserved = "@" | "`"
   //[104]   c-ns-alias-node                    ::= "*" ns-anchor-name
   val c_ns_alias_node = "*" ~ ns_anchor_name
   //[105]   e-scalar                           ::= /* Empty */
-  val e_scalar = Pass.map(u=>"")
+  val e_scalar:Parser[String] = Pass.map(u=>"")
   //[106]   e-node                             ::= e-scalar
   val e_node = e_scalar
   //[107]   nb-double-char                     ::= c-ns-esc-char | ( nb-json - "\" - """ )
