@@ -95,26 +95,129 @@ Raml( //map
  
 )
 
-push
- register Listener scalar(s:label),map_start(s:label),map_end,seq_start(s:label),seq_end,
- these methods return 
-pull 
- call .get(pull:Map[String,Parser]) since order doesn't matter
- .get(keys:Set[Parser[_]]) => (key:String, p:Parser)
+use generic YAML parser
+generate specific parser(s) which are simpler and match on exact trees (serialization)
+need to support dynamic parser since RAML uses it's own referencing. flatMap
+
+
+generics do not work with recursion
+
+push Node to a match
+
+ScalarNode : Parser[ScalarNode]
+ListNode : Parser[Seq[Node]].map((Seq[Node])->(ListNode))
+ Seq[Node]
+
+MapNode : Parser[MapNode]
+ Seq[(Node,Node)] //vs 
+
+MapEntryNode 
+ key: Node (which may be 
+ value: Node
+
+
+ScalarNode => 
+_ => Unit //ignore
+
+ 
+as a dev I want to provide a template, which reads like a yaml file.
+this needs to allow for dynamic sections, such that the 
+
+//map as a Map
+map(Scalar(typeName) => typeName) 
+
+//map where order matters, in that the later parser behaves based on the former
+map(
+KeyValueNode("special type",Any).flatMap( specialThing )  
+// rather then each time generate a new parser, we merly want to accumulate 
+// result is new state (accumulated value), such that 
+bascially later-parser(earlier-parser(..))
+
+parent needs to treat content as 
+
+first section (
+detector-parser 
+).flatMap(
+second section
+dependent-parser
+)
+which requires partial yaml list/map  processing in the first section
+partial list processing 
+  while node in (), can not contain Any
+  negative lookahead
+
+partial map processing
+
+another way:
+no reference checking at parse time. n pass parsing. 
+
+
+parser-detector(result from last parser-detector)
+Success.flatMap(dependent-parser(result from last parser-detector))
+dependent-parser(context)
+
+)
+
+List[_]-> ListNode
+Map[_] -> MapNode
+
+(x->y | a->b).rep -> MapNode
+ListNode(l|m|n) => (l|m|n).rep
+ListNode(l ~ m ~ n) => (l ~ m ~ n).rep
+MapNode(a->l, b->m, c->n) => (a ~ l | b->m | c->n).rep
+ a: ListNode
+ b: MapNode 
+ c: Scalar
+
+
+Parser
+ SeqNode
+ MapNode
+ ScalarNode
+
+ Either
+ Optional
+ 
+
+Yaml(
+ ListNode // complete Yaml List, implied Either
+ MapNode // complete Yaml Mapping, implied Either
+ ScalarNode
+
+ SplitNode( // may be a partial list or map
+ // stop condition: lookahead, 
+ // 
+ )
+ Node.rep() //  partial list or map
+)
+
+non-scalar keys mean we don't know what type a node is untill after it is parsed, 
+since we want to often skip unmatched, most of the time we don't know what type a node is untill after it is parsed. 
+?If MapNode can check that none of it's keys is a MapNode
+
+Node
+for each type
+ if a type is missing, use a no-capture parser for that type
+
+
+
+how to choose between two map or list if all enteries are optional?
+
  
 val r:Raml
-val raml = (title | description | resources).rep
+//val raml = (title | description | resources).rep // list
+val raml = map(title, description, resources)
 val title = entry("title",scalar.!).map(r.title = _)
 val description = entry("description",scalar.!).map(r.description_)
 val types = entry("types",type.!).map(r.types_)
 
-Yaml (
+Yaml.
  map(
  k -> string.map(),
  sk -> list ( a|b|c )
  s2 -> list ( a,b,c )
  ).map(Map[K,V]=>T):T
-)
+
 
 
  

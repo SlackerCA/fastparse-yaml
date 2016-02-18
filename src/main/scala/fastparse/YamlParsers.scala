@@ -5,20 +5,22 @@ import fastparse.all._
 object Yaml {
   // l-bare-document                    ::= s-l+block-node(-1,block-in) /* Excluding c-forbidden content */
 
-  def seq(nodes:Seq[Node[T]]):SeqNode[T]
+  def list(nodes:Seq[Node[T]]):SeqNode[T]
   def map(nodes:Map[Node[K],Node[V]]):MapNode[K,V]
-  def string(text:String):ScalarNode[String] = new ScalarNode(text)
+  implicit def stringToScalarNode(text:String):ScalarNode[String] = ScalarNode(text)
 }
 
-abstract class Node[T]  {
+abstract class Node[T] {
   // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  def block_indented(n:Int,c:Context):Parser[T]
+  //def block_indented(n:Int,c:Context):Parser[T] = block_indented(Y(n,c))
+  def block_indented(implicit y:YamlParser):Parser[T]
 
   // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
   //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
   //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  def block_node(n:Int,c:Context):Parser[T]
+  // def block_node(n:Int,c:Context):Parser[T] = block_node(Y(n,c)
+  def block_node(implicit y:YamlParser):Parser[T] =
 
   // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
@@ -28,9 +30,7 @@ abstract class Node[T]  {
   def flow_json_content(n:Int,c:Context):Parser[T]
 }
 
-class MapNode[K,V] (
-  val nodes:Map[Node[K],Node[V]]
-) extends Node[Map[T]] {
+class MapNode[K,V] (nodes:Map[Node[K],Node[V]]) extends Node[Map[T]] {
   // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
   override def block_indented(n:Int,c:Context):Parser[T]
 
@@ -89,12 +89,10 @@ class MapNode[K,V] (
   private def flow_yaml_node(n:Int,c:Context)
 }
 
-class SeqNode[T] (
-  val nodes:Seq[Node[T]]
-) extends Node[Seq[T]]
-{
+class ListNode[T] (nodes:Seq[Node[T]]) extends Node[Seq[T]] {
+
   // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  override def block_indented(n:Int,c:Context):Parser[Seq[T]] = compact_sequence(n,c) | block_node(n,c)
+  override def block_indented(n:Int,c:Context):Parser[Seq[T]] = (s_indent(n) ~  s_compact_sequence(n,c)) | block_node(n,c) 
 
   // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
@@ -104,6 +102,8 @@ class SeqNode[T] (
     (( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) ))
     | (s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments)
   }
+
+  private def block_scalar_unit(n:Int,c:Context):Parser[Unit] =
 
   // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
@@ -122,7 +122,7 @@ class SeqNode[T] (
   //  c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
   private def block_sequence(n:Int):Parser[Seq[T]] = {
     /* For some fixed auto-detected m > 0 */
-    nodes.map( s_indent(n+m) "-" ~ !(ns_char) ~/ _.block_indented(BlockIn) )
+    ~(nodes.map( s_indent(n+m) "-" ~ !(ns_char) ~/ P(_.block_indented(BlockIn)) ))
   }
 
   // c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
@@ -132,21 +132,30 @@ class SeqNode[T] (
 
 
 }
-class ScalarNode[T] (
-  val text:String
-) extends Node[T] {
+
+abstract class ScalarNode[T] extends Node[T] {
+  import YamlParsers._
   // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  override def block_indented(n:Int,c:Context):Parser[T]
+  override def block_indented(n:Int,c:Context):Parser[T] = {
+    //TODO: avoid parsing a whole subtree just for negative match
+    !(s_indent_any.flatMap((m:Int)=>Y(n+1+m,c).s_l_block_indented_compact)) ~
+    (block_node(n,c) | ( e_node.! ~ s_l_comments ))
+  }
 
   // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
   //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
   //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  override def block_node(n:Int,c:Context):Parser[T]
+  override def block_node(n:Int,c:Context):Parser[T] = {
+    block_scalar(n,c) | P(Y(n,c).s_l_flow_in_block)
+  }
 
   // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  override def flow_node(n:Int,c:Context):Parser[T]
+  override def flow_node(n:Int,c:Context):Parser[T] = {
+    !c-ns-alias-node ~ ( (ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)) | ( c-ns-properties(n,c) ~ ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) ) )
+    c-ns-properties(n,c) ~ s-separate(n,c) ~ (ns-flow-yaml-content(n,c) | c-flow-json-content(n,c))
+  }
 
   // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
   override def flow_json_content(n:Int,c:Context):Parser[T]
@@ -201,10 +210,12 @@ object Clip extends Chomping
 object Keep extends Chomping
 
 /** 
- * No UTF-32 support.
+ *  Limitations:
+ * - Representation dependent.
+ * - No UTF-32 support.
+ * 
  * @see http://www.yaml.org/spec/1.2/spec.html
  */
-
 class YamlParser private (private val indentation:Int, private val context:Context) {
   import YamlParsers._
   private def Y(indentation:Int, context:Context) = YamlParser(indentation,context)
@@ -454,7 +465,7 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   //[197]   s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
   val s_l_flow_in_block_impl = s_separate ~ ns_flow_node ~ s_l_comments
   //val s_l_flow_in_block_Optomization = &(s_l_comments | s_separate_in_line).flatMap(Unit=>Y(indentation+1,FlowOut).s_l_flow_in_block_impl)
-  val s_l_flow_in_block = P(Y(indentation+1,FlowOut).s_l_flow_in_block_impl)
+  val s_l_flow_in_block = Y(indentation+1,FlowOut).s_l_flow_in_block_impl
 
   //[198]   s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
   val s_l_block_in_block = s_l_block_scalar | s_l_block_collection
@@ -473,6 +484,10 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   }
   val s_l_block_collection = s_l_block_collection_properties ~ s_l_comments ~ ( l_block_sequence_seq_spaces | l_block_mapping )
 }
+
+
+
+
 object YamlParser { 
   //TODO: YamlParser instance caching 
   def apply(indentation:Int, context:Context) = new YamlParser(indentation,context)
@@ -622,6 +637,11 @@ val c_reserved = "@" | "`"
   private val c_ns_esc_char_unicode = ("\\x" ~ ns_hex_digit.rep(min=2,max=2).!.map(Integer.parseInt(_, 4)) | "\\u" ~ ns_hex_digit.rep(min=4,max=4).!.map(Integer.parseInt(_, 8)) /*| "\\U" ~ hexDigit(8)*/)
   val c_ns_esc_char = (c_ns_esc_char_escaped | c_ns_esc_char_unicode)
 
+
+  //[63]    s-indent(n)                        ::= s-space × n
+  def s_indent(indentation:Int) = s_space.rep(min=indentation,max=indentation)
+  // like s_indent, but matches on any increase in indentation size and returns new indentation size
+  def s_indent_more(indentation:Int):Parser[Int] = s_space.!.rep(indentation+1).map(_.length)
   // like s_indent, but matches on any positive indentation size and returns new indentation size
   val s_indent_any:Parser[Int] = s_space.!.rep(1).map(_.length)
 
@@ -746,7 +766,6 @@ val c_reserved = "@" | "`"
   val l_yaml_stream = l_document_prefix.rep ~ l_any_document.? ~ ( l_document_suffix.rep(1) ~ l_document_prefix.rep ~ l_any_document.? | l_document_prefix.rep ~ l_explicit_document.? ).rep
 }
 
-//TODO: BlockScalar move to outer class
 class BlockScalar(val chomping:Chomping, val indentation:Int) {
   import YamlParsers._
   //val Y = YamlParser(indentation,BlockIn)
