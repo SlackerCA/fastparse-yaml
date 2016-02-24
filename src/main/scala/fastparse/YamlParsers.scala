@@ -3,14 +3,30 @@ package fastparse.yaml
 import fastparse.all._
 
 object Yaml {
-  // l-bare-document                    ::= s-l+block-node(-1,block-in) /* Excluding c-forbidden content */
+  def apply(root:ListNode[T]):YamlParser[T]
+  def apply(root:MapNode[T]):YamlParser[T]
+  def apply(root:ScalarNode[T]):YamlParser[T]
 
-  def list(nodes:Seq[Node[T]]):SeqNode[T]
-  def map(nodes:Map[Node[K],Node[V]]):MapNode[K,V]
+  def list(nodes:Node[T]*):ListNode[T]
+  def section(nodes:Node[T]*):Section[T]
+  def list(sections:Product*,nodes:Node[T]*):ListNode[T]
+  def map(nodes:(Node[K],Node[V])*):MapNode[K,V]
   implicit def stringToScalarNode(text:String):ScalarNode[String] = ScalarNode(text)
 }
 
+class YamlParser[T]
+private (val root:Node[T])
+{
+  private val anchors = new Map[String,Node[Unit]]
+
+  def parse(source:String):T = {
+
+  }
+}
+
 abstract class Node[T] {
+
+
   // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
   //def block_indented(n:Int,c:Context):Parser[T] = block_indented(Y(n,c))
   def block_indented(implicit y:YamlParser):Parser[T]
