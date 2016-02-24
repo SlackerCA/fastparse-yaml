@@ -233,6 +233,7 @@ things that can be anchored (aliased) {
   [138]   ns-s-flow-seq-entries(n,c)         ::= ns-flow-seq-entry(n,c) s-separate(n,c)? ( “,” s-separate(n,c)? ns-s-flow-seq-entries(n,c)? )?
    @Scalar,Seq,Map
    [139]   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
+    @Map
     [150]   ns-flow-pair(n,c)                  ::= ( “?” s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
      [151]   ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
       [152]   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
@@ -296,8 +297,6 @@ Node.block_indented
  [195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
 
 @Map
-Map.block-map-explicit-entry(n)(key,value) = “?” ~ P(key.block_indented(n,block-out) ~ ((s-indent(n) “:” value.block_indented(n,block-out))|enode))
-//try all keys, then 
 [188]   ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
  [189]   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
   [190]   c-l-block-map-explicit-key(n)      ::= “?” s-l+block-indented(n,block-out)
