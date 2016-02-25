@@ -169,6 +169,41 @@ MapNode(a->l, b->m, c->n) => (a ~ l | b->m | c->n).rep
  b: MapNode 
  c: Scalar
 
+immutable alias resolver passed in on parser
+ creation:
+  only works if creation is JIT, which is bad
+  easier to implement
+  most yaml does not have alias anyway
+ invocation:
+  requires change to 
+ 
+special Alias parser is stateful
+ must be idempotent
+ requires document scope
+ ties parsers to some parent. untill now parsers graph was DAG
+
+the API objects do not 
+
+Map
+List
+
+Yaml.List(arg, args...) = List(Either(arg,args))
+Yaml.List( ) 
+Yaml.Either(arg, args...) = if args.lentgh = 1 then args(0)
+Yaml.Optional(arg) = 
+
+Yaml.parse(s:String) = 
+
+
+asdf = List(Scalar)
+Map("asdf" -> asdf.map(,
+"fdsa" -> asdf.map(_.reverse)) Map[String,List[String]]
+.map(m=>Foo(m.get("asdf"),m.get("fdsa"))) Foo
+
+Map.bind(Foo)
+
+
+
 
 Parser
  SeqNode
@@ -203,6 +238,11 @@ for each type
 
 how to choose between two map or list if all enteries are optional?
 
+
+either (
+c-flow-sequence
+
+)
  
 val r:Raml
 //val raml = (title | description | resources).rep // list
@@ -219,8 +259,54 @@ Yaml.
  ).map(Map[K,V]=>T):T
 
 
+build(val root) {
+val l-bare-document = root.s-l+block-node(-1,block-in) /* Excluding c-forbidden content */
+val l-explicit-document = c-directives-end ( l-bare-document | ( e-node s-l-comments ) )
+val l-directive-document = l-directive+ l-explicit-document
+l-any-document = l-directive-document | l-explicit-document | l-bare-document
+l-any-document
+}
 
+root.block_node(-1,block_in)
+
+
+List.block_node(n,c) =
+
+ l+block-sequence(seq-spaces(n,c)) =
+   (c-l-block-seq-entry)+
+
+ block-seq-entry = &("-").flatMap(block_indented)
+   either(for each m:members yield ("-" ~ m.block_indented))
+
+
+abstract class Element[T] {
+ def map[B](f:T=>B):Element[B]
+}
  
+Map[K,T](pairs:(Element[K], Element[T])*)
+
+abstract class ObjectElement[T :< Product] extends Element[T]{
+def map[T](f:T=>O)
+}
+
+Object1[(P1)](
+ p1:(String, Element[P1])
+){
+def map[T](f:T1=>T)
+}
+Object2[P1,P2](
+ p1:(String, Element[P1])
+ p2:(String, Element[P2])
+){
+def map[T](f:T1,T2=>T)
+}
+
+
+collect
+
+
+
+
 
   */
 class Resource

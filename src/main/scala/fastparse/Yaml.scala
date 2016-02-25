@@ -103,19 +103,21 @@ on success
 }
 
  */
-
+/*
 object Yaml {
   def Map(pairs:(Element[K], Element[T])*):MapElement[Map[K,T]]
 }
 
 
 abstract class Element[T] {
+  parser: Parser[T] =>
   def map[B](f:T=>B):Element[B]
   def filter(f:T=>Boolean):Element[T]
   def parse(so:String):T = {
     block_node(-1,block_in).parse(s)
   }
 }
+
 //class MappedElement (e:Element[])
 
 //def each(pairs:Seq[Parser[(K,V)]])
@@ -131,9 +133,12 @@ class MapElement[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Element[
   private[fastparse.yaml] val parser = new MapParsers(pairs)
 }
 
-
+ */
 abstract class Parsers[T] {
   def block_node(y:Y)
+  // [185]   s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  //  [186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
+  //  [195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
   def block_indented(y:Y)
   def e_scalar = Fail
   def yaml_content(y:Y)
@@ -166,10 +171,9 @@ class MapParsers[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Parsers[
   def block_node(y:Y) = {
     val y1 = Y(y.indent+1,y.context)
     val seq_indent = if(y.context == BlockOut) y.indent-1 else y.indent
-
     
     val not_block_scalar = !( y1.separate ~ (y1.properties ~ y1.separate).? ~ CharIn("|<") ) // cache me
-    val not_block_seq_entry =  !(y.s_indent ~ " -" ~ CharIn(" \t\n\l")) // cache me
+    val not_block_seq_entry =  !(y.indent_more ~ "-" ~ CharIn(" \t\n\r")) // cache me
     val block_in_block = 
       not_block_scalar ~
       ( y1.separate ~ y1.properties ).? ~ comments ~ 
@@ -178,33 +182,40 @@ class MapParsers[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Parsers[
 
     val y1FO = Y(y.indent+1,FlowOut)
     val flow_in_block = y1FO.separate ~ flow_node(y1FO) ~ comments
+
+    block_in_block | flow_in_block
   }
-  
-  def block_indented(y:Y) = indent_any.flatMap((i:Int) => block_mapping(Y(y.indent+1+i,y.context))) | block_node(y) //| ( e_node s-l-comments )
 
 
-
-  private def block_collection(y:Y) = y.indent_more.flatMap(n=>block_mapping(Y(n,y.context)))
+  // [185]   s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  //  [186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
+  //  [195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
+  def block_indented(y:Y) = {
+    val not_block_seq_entry =  !(y.indent_any ~ "-" ~ CharIn(" \t\n\r")) // cache me
+    //compact-sequence(n)           ::= c-l-block-seq-entry(n)
+    // our modifed block-mapping works for compact-mapping
+    indent_any.flatMap((i:Int) => block_mapping(Y(y.indent+1+i,y.context))) | block_node(y) //| ( e_node s-l-comments )
+  }
 
   // [187]   l+block-mapping(n)                 ::= ( s-indent(n+m) ns-l-block-map-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-  //c-l-block-seq-entry(n)             ::= “-” /* Not followed by an ns-char */
-  private def block_mapping(y:Y) = not_block_seq_entry ~ block_map_entry(y).rep(min=1,sep=y.s_indent)
+  private def block_mapping(y:Y) = block_map_entry(y).rep(min=1,sep=y.s_indent)
 
-  private def block_map_entry(y:Y) = (
-    
+  // [188]   ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
+  private def block_map_entry(y:Y) = block_map_explicit_entry(y) | block_map_implicit_entry(y)
 
-  )
 
   // [189]   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
   //  [190]   c-l-block-map-explicit-key(n)      ::= “?” s-l+block-indented(n,block-out)
   //  [191]   l-block-map-explicit-value(n)      ::= s-indent(n) “:” s-l+block-indented(n,block-out)
-  private def block_map_explicit_entry(y:Y) = "?" ~/ P(
+  private def block_map_explicit_entry(y:Y) = {
     val yBlockOut = Y(y.indent,BlockOut)
-    Either (
-      for((key,value) <- pairs) yield
-        (key.block_indented(yBlockOut) ~ ":" ~/ value.block_indented(yBlockOut))
+    "?" ~/ P(
+      Either (
+        for((key,value) <- pairs) yield
+          (key.block_indented(yBlockOut) ~ ":" ~/ value.block_indented(yBlockOut))
+      )
     )
-  )
+  }
 
   // [192]   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
   //  [193]   ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
@@ -259,7 +270,7 @@ class MapParsers[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Parsers[
         // [147]   c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
         val flow_map_separate_value = ":" ~ !y.plain_safe ~/ ( ( y.separate ~ value.flow_node(y) ) | value.e_node )
         //ns_flow_map_yaml_key_entry
-        (key.yaml_node(y) ~/ ( ( y.separate.? ~ flow_map_separate_value ) | value.e_node )) |
+        (key.yaml_node(y) ~ ( ( y.separate.? ~ flow_map_separate_value ) | value.e_node )) |
         //c-ns-flow-map-empty-key-entry(n,c)
         P(key.e_node ~ flow_map_separate_value ) |
         // c-ns-flow-map-json-key-entry(n,c)
@@ -269,10 +280,22 @@ class MapParsers[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Parsers[
   }
 }
 
-class ListParsers[T]{
-  def block_node(n:Int,c:Context) = {
+// [196]   s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
+//  [198]   s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
+//   [199]   s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
+//    [170]   c-l+literal(n)                     ::= “|” c-b-block-header(m,t) l-literal-content(n+m,t)
+//     [173]   l-literal-content(n,t)             ::= ( l-nb-literal-text(n) b-nb-literal-next(n)* b-chomped-last(t) )? l-chomped-empty(n,t)
+/*
+class ScalarParsers[T]{
+  def block_node(y:Y) = {
+    val y1 = Y(y.indent+1,y.context)
+    val block_scalar = y.separate ( y1.properties ~ y1.separate )? ( literal(y) | c-l+folded(n) )
 
   }
+
+  def block_indented(y:Y) = {}
+  def yaml_content(y:Y) = {}
+  def json_content(y:Y) = {}
 }
 
 abstract class ObjectElement[T :< Product] extends Element[T]{
@@ -290,3 +313,4 @@ Object2[P1,P2](
 ){
 def map[T](f:T1,T2=>T)
 }
+ */

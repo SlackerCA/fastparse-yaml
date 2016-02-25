@@ -2,216 +2,6 @@ package fastparse.yaml
 
 import fastparse.all._
 
-object Yaml {
-  def apply(root:ListNode[T]):YamlParser[T]
-  def apply(root:MapNode[T]):YamlParser[T]
-  def apply(root:ScalarNode[T]):YamlParser[T]
-
-  def list(nodes:Node[T]*):ListNode[T]
-  def section(nodes:Node[T]*):Section[T]
-  def list(sections:Product*,nodes:Node[T]*):ListNode[T]
-  def map(nodes:(Node[K],Node[V])*):MapNode[K,V]
-  implicit def stringToScalarNode(text:String):ScalarNode[String] = ScalarNode(text)
-}
-
-class YamlParser[T]
-private (val root:Node[T])
-{
-  private val anchors = new Map[String,Node[Unit]]
-
-  def parse(source:String):T = {
-
-  }
-}
-
-abstract class Node[T] {
-
-
-  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  //def block_indented(n:Int,c:Context):Parser[T] = block_indented(Y(n,c))
-  def block_indented(implicit y:YamlParser):Parser[T]
-
-  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  // def block_node(n:Int,c:Context):Parser[T] = block_node(Y(n,c)
-  def block_node(implicit y:YamlParser):Parser[T] =
-
-  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  def flow_node(n:Int,c:Context):Parser[T]
-
-  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  def flow_json_content(n:Int,c:Context):Parser[T]
-}
-
-class MapNode[K,V] (nodes:Map[Node[K],Node[V]]) extends Node[Map[T]] {
-  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  override def block_indented(n:Int,c:Context):Parser[T]
-
-  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  override def block_node(n:Int,c:Context):Parser[T]
-
-  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  override def flow_node(n:Int,c:Context):Parser[T]
-
-  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  override def flow_json_content(n:Int,c:Context):Parser[T]
-
-
-
-  // l+block-mapping(n)                 ::= ( s-indent(n+m) ns-l-block-map-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-  private def block_mapping(n:Int)
-
-  // ns-l-compact-mapping(n)            -> ns-l-block-map-entry(n)+
-  //  ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
-  //   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
-  //    c-l-block-map-explicit-key(n)      ::= "?" s-l+block-indented(n,block-out)
-  //    l-block-map-explicit-value(n)      ::= s-indent(n) ":" s-l+block-indented(n,block-out)
-  //   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
-  //    ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
-  //     c-s-implicit-json-key(c)           ::= c-flow-json-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-  //     ns-s-implicit-yaml-key(c)          ::= ns-flow-yaml-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-  //    c-l-block-map-implicit-value(n)    ::= ":" ( s-l+block-node(n,block-out) | ( e-node s-l-comments ) )
-  private def compact_mapping(n:Int)
-
-  // ns-flow-pair(n,c)                  ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
-  //  ns-flow-map-explicit-entry(n,c)    ::= ns-flow-map-implicit-entry(n,c) | ( e-node /* Key */ e-node /* Value */ )
-  //   ns-flow-map-implicit-entry(n,c)    ::= ns-flow-map-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-map-json-key-entry(n,c)
-  //    ns-flow-map-yaml-key-entry(n,c)    ::= ns-flow-yaml-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-separate-value(n,c) ) | e-node )
-  //     c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
-  //    c-ns-flow-map-empty-key-entry(n,c) ::= e-node /* Key */ c-ns-flow-map-separate-value(n,c)
-  //    c-ns-flow-map-json-key-entry(n,c)  ::= c-flow-json-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-adjacent-value(n,c) ) | e-node )
-  //     c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
-  //  ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
-  //   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
-  //   c-ns-flow-pair-json-key-entry(n,c) ::= c-s-implicit-json-key(flow-key) c-ns-flow-map-adjacent-value(n,c)
-  //    c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
-  private def flow_pair(n:Int,c:Context)
-
-  // c-flow-mapping(n,c)                ::= "{" s-separate(n,c)? ns-s-flow-map-entries(n,in-flow(c))? "}"
-  //  ns-s-flow-map-entries(n,c)         ::= ns-flow-map-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-map-entries(n,c)? )?
-  //   ns-flow-map-entry(n,c)             ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-map-implicit-entry(n,c)
-  private def flow_mapping(n:Int,c:Context)
-
-  // c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
-  private def flow_json_node(n:Int,c:Context)
-  // ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
-  private def flow_yaml_node(n:Int,c:Context)
-}
-
-class ListNode[T] (nodes:Seq[Node[T]]) extends Node[Seq[T]] {
-
-  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  override def block_indented(n:Int,c:Context):Parser[Seq[T]] = (s_indent(n) ~  s_compact_sequence(n,c)) | block_node(n,c) 
-
-  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  override def block_node(n:Int,c:Context):Parser[Seq[T]] = {
-    (( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) ))
-    | (s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments)
-  }
-
-  private def block_scalar_unit(n:Int,c:Context):Parser[Unit] =
-
-  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  override def flow_node(n:Int,c:Context):Parser[Seq[T]]
-
-  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  override def flow_json_content(n:Int,c:Context):Parser[Seq[T]]
-
-  //[186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
-  private def compact_sequence(n:Int):Parser[Seq[T]] = {
-
-  }
-
-  // c => block-in | block-out
-  // l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-  //  c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
-  private def block_sequence(n:Int):Parser[Seq[T]] = {
-    /* For some fixed auto-detected m > 0 */
-    ~(nodes.map( s_indent(n+m) "-" ~ !(ns_char) ~/ P(_.block_indented(BlockIn)) ))
-  }
-
-  // c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
-  //  ns-s-flow-seq-entries(n,c)         ::= ns-flow-seq-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-seq-entries(n,c)? )?
-  //   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
-  private def flow_sequence(n:Int,c:Context):Parser[Seq[T]]
-
-
-}
-
-abstract class ScalarNode[T] extends Node[T] {
-  import YamlParsers._
-  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  override def block_indented(n:Int,c:Context):Parser[T] = {
-    //TODO: avoid parsing a whole subtree just for negative match
-    !(s_indent_any.flatMap((m:Int)=>Y(n+1+m,c).s_l_block_indented_compact)) ~
-    (block_node(n,c) | ( e_node.! ~ s_l_comments ))
-  }
-
-  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  override def block_node(n:Int,c:Context):Parser[T] = {
-    block_scalar(n,c) | P(Y(n,c).s_l_flow_in_block)
-  }
-
-  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  override def flow_node(n:Int,c:Context):Parser[T] = {
-    !c-ns-alias-node ~ ( (ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)) | ( c-ns-properties(n,c) ~ ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) ) )
-    c-ns-properties(n,c) ~ s-separate(n,c) ~ (ns-flow-yaml-content(n,c) | c-flow-json-content(n,c))
-  }
-
-  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  override def flow_json_content(n:Int,c:Context):Parser[T]
-
-  // s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
-  private def block_scalar(n:Int,c:Context):Parser[T] = {
-    s_separate(n+1,c) ( c_ns_properties(n+1,c) s_separate(n+1,c) ).? ( c_l_literal(n).! | c_l_folded(n).! ).filter(_==text)
-  }
-
-  // ns-flow-yaml-content(n,c)          ::= ns-plain(n,c)
-  private def flow_yaml_content(n:Int,c:Context):Parser[T]
-  // c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
-  private def single_quoted(n:Int,c:Context):Parser[T]
-  // c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
-  private def double_quoted(n:Int,c:Context):Parser[T]
-}
-
-
-class EitherNode[T] (
-  val nodes:Seq[Node[T]]
-) extends Node[T]  {
-  // s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  def block_indented(n:Int,c:Context):Parser[T]
-
-  // s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  //  s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-  //   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-  //  s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  def block_node(n:Int,c:Context):Parser[T]
-
-  // ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  //  ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  def flow_node(n:Int,c:Context):Parser[T]
-
-  // c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  def flow_json_content(n:Int,c:Context):Parser[T]
-}
-
-
-
 trait Context
 object BlockOut extends Context 
 object BlockIn extends Context
@@ -428,15 +218,14 @@ class YamlParser private (private val indentation:Int, private val context:Conte
   //[162]   c-b-block-header(m,t)              ::= ( ( c-indentation-indicator(m) c-chomping-indicator(t) ) | ( c-chomping-indicator(t) c-indentation-indicator(m) ) ) s-b-comment
   val c_b_block_header_detect_indent:Parser[(Option[Chomping], Int)] = (
     c_chomping_indicator.? ~ !c_indentation_indicator ~ 
-      Peekahead(s_b_comment ~ (s_space.rep ~ b_non_content).rep ~ s_space.!.rep(indentation+1) ~ nb_char).map(_.length) )
-  val X:Parser[(Option[Chomping], Int)] =
+      Peek(s_b_comment ~ (s_space.rep ~ b_non_content).rep ~ s_space.!.rep(indentation+1) ~ nb_char).map(_.length) )
+  private val block_header:Parser[(Option[Chomping], Int)] =
     ( ( ( c_chomping_indicator.? ~ c_indentation_indicator )
       | ( c_indentation_indicator ~ c_chomping_indicator.? ).map(_.swap)
       |   c_b_block_header_detect_indent )
       ~ s_b_comment
     )
-  val c_b_block_header:Parser[BlockScalar] = X.map( (t:(Option[Chomping], Int)) => BlockScalar(t._1.getOrElse(Clip), t._2) )
-      
+  val c_b_block_header:Parser[BlockScalar] = block_header.map( (t:(Option[Chomping], Int)) => BlockScalar(t._1.getOrElse(Clip), t._2) )
 
 
   //[170]   c-l+literal(n)                     ::= "|" c-b-block-header(m,t) l-literal-content(n+m,t)
@@ -509,6 +298,9 @@ object YamlParser {
   def apply(indentation:Int, context:Context) = new YamlParser(indentation,context)
 }
 
+/**
+  * Context free Parsers.
+  */
 object YamlParsers {
   //TODO: BlockScalar instance caching
   //def BlockScalar(chomping:Chomping)(indentation:Int) = new BlockScalar(chomping,indentation)
@@ -785,64 +577,68 @@ val c_reserved = "@" | "`"
 class BlockScalar(val chomping:Chomping, val indentation:Int) {
   import YamlParsers._
   //val Y = YamlParser(indentation,BlockIn)
-  val s_indent = s_space.rep(min=indentation,max=indentation)
-  val l_empty_Block = s_space.rep(max=indentation) ~ b_non_content
-  val l_empty_rep = l_empty_Block.rep
-  val b_l_folded_Block = ((b_non_content ~ l_empty_Block.rep(1)) | b_as_space)
+  private val s_indent = s_space.rep(min=indentation,max=indentation)
+  private val l_empty_Block = s_space.rep(max=indentation) ~ b_non_content
+  private val l_empty_rep = l_empty_Block.rep
 
   //[64]    s-indent(<n)                       ::= s-space × m /* Where m < n */
-  val s_indent_lt = s_space.rep(min=0,max=indentation-1)
+  private val s_indent_lt = s_space.rep(min=0,max=indentation-1)
   //[65]    s-indent(≤n)                       ::= s-space × m /* Where m ≤ n */
-  val s_indent_le = s_space.rep(min=0,max=indentation)
+  private val s_indent_le = s_space.rep(min=0,max=indentation)
 
   //[165]   b-chomped-last(t)                  ::= t = strip ⇒ b-non-content | /* End of file */
   //                                               t = clip  ⇒ b-as-line-feed | /* End of file */
   //                                               t = keep  ⇒ b-as-line-feed | /* End of file */
-  val b_chomped_last = chomping match {
+  private val b_chomped_last = chomping match {
     case Strip => b_non_content
     case Clip  => b_as_line_feed
     case Keep  => b_as_line_feed
   }
 
-  //[167]   l-strip-empty(n)                   ::= ( s-indent(≤n) b-non-content )* l-trail-comments(n)?
-  val l_strip_empty = (( s_indent_le ~ b_non_content ).rep ~ l_trail_comments.?)
-  //[168]   l-keep-empty(n)                    ::= l-empty(n,block-in)* l-trail-comments(n)?
-  val l_keep_empty = (l_empty_rep ~ l_trail_comments.?)
   //[169]   l-trail-comments(n)                ::= s-indent(<n) c-nb-comment-text b-comment l-comment*
-  val l_trail_comments = s_indent_lt ~ c_nb_comment_text ~ b_comment ~ l_comment.rep
+  private val l_trail_comments = s_indent_lt ~ c_nb_comment_text ~ b_comment ~ l_comment.rep
+  //[167]   l-strip-empty(n)                   ::= ( s-indent(≤n) b-non-content )* l-trail-comments(n)?
+  private val l_strip_empty = (( s_indent_le ~ b_non_content ).rep ~ l_trail_comments.?)
+  //[168]   l-keep-empty(n)                    ::= l-empty(n,block-in)* l-trail-comments(n)?
+  private val l_keep_empty = (l_empty_rep ~ l_trail_comments.?)
   //[166]   l-chomped-empty(n,t)               ::= t = strip ⇒ l-strip-empty(n)
   //                                               t = clip  ⇒ l-strip-empty(n)
   //                                               t = keep  ⇒ l-keep-empty(n)
-  val l_chomped_empty = chomping match {
+  private val l_chomped_empty = chomping match {
     case Strip => l_strip_empty
     case Clip  => l_strip_empty
     case Keep  => l_keep_empty
   }
 
-  //[171]   l-nb-literal-text(n)               ::= l-empty(n,block-in)* s-indent(n) nb-char+
-  val l_nb_literal_text =  l_empty_rep ~ s_indent ~ nb_char.rep(1)
   // (space{0,n}\n)* space{n}[^\n\r]+
   // 
-  //[172]   b-nb-literal-next(n)               ::= b-as-line-feed l-nb-literal-text(n)
-  val b_nb_literal_next = b_as_line_feed ~ l_nb_literal_text
-  //[173]   l-literal-content(n,t)             ::= ( l-nb-literal-text(n) b-nb-literal-next(n)* b-chomped-last(t) )? l-chomped-empty(n,t)
-  val l_literal_content = ( l_nb_literal_text ~ b_nb_literal_next.rep ~ b_chomped_last ).? ~ l_chomped_empty
+  val l_literal_content = {
+    //[171]   l-nb-literal-text(n)               ::= l-empty(n,block-in)* s-indent(n) nb-char+
+    val l_nb_literal_text =  l_empty_rep ~ s_indent ~ nb_char.rep(1)
+    //[172]   b-nb-literal-next(n)               ::= b-as-line-feed l-nb-literal-text(n)
+    val b_nb_literal_next = b_as_line_feed ~ l_nb_literal_text
+    //[173]   l-literal-content(n,t)             ::= ( l-nb-literal-text(n) b-nb-literal-next(n)* b-chomped-last(t) )? l-chomped-empty(n,t)
+    ( l_nb_literal_text ~ b_nb_literal_next.rep ~ b_chomped_last ).? ~ l_chomped_empty
+  }
 
-  //[175]   s-nb-folded-text(n)                ::= s-indent(n) ns-char nb-char*
-  val s_nb_folded_text = s_indent ~ ns_char ~ nb_char.rep
-  //[176]   l-nb-folded-lines(n)               ::= s-nb-folded-text(n) ( b-l-folded(n,block-in) s-nb-folded-text(n) )*
-  val l_nb_folded_lines = s_nb_folded_text ~ ( b_l_folded_Block ~ s_nb_folded_text ).rep
-  //[177]   s-nb-spaced-text(n)                ::= s-indent(n) s-white nb-char*
-  val s_nb_spaced_text = s_indent ~ s_white ~ nb_char.rep
-  //[178]   b-l-spaced(n)                      ::= b-as-line-feed l-empty(n,block-in)*
-  val b_l_spaced = b_as_line_feed ~ l_empty_rep
-  //[179]   l-nb-spaced-lines(n)               ::= s-nb-spaced-text(n) ( b-l-spaced(n) s-nb-spaced-text(n) )*
-  val l_nb_spaced_lines = s_nb_spaced_text ~ ( b_l_spaced ~ s_nb_spaced_text ).rep
-  //[180]   l-nb-same-lines(n)                 ::= l-empty(n,block-in)* ( l-nb-folded-lines(n) | l-nb-spaced-lines(n) )
-  val l_nb_same_lines = l_empty_rep ~ ( l_nb_folded_lines | l_nb_spaced_lines )
-  //[181]   l-nb-diff-lines(n)                 ::= l-nb-same-lines(n) ( b-as-line-feed l-nb-same-lines(n) )*
-  val l_nb_diff_lines = l_nb_same_lines ~ ( b_as_line_feed ~ l_nb_same_lines ).rep
-  //[182]   l-folded-content(n,t)              ::= ( l-nb-diff-lines(n) b-chomped-last(t) )? l-chomped-empty(n,t)
-  val l_folded_content = ( l_nb_diff_lines ~ b_chomped_last ).? ~ l_chomped_empty
+  val l_folded_content = {
+    val b_l_folded_Block = ((b_non_content ~ l_empty_Block.rep(1)) | b_as_space)
+    //[175]   s-nb-folded-text(n)                ::= s-indent(n) ns-char nb-char*
+    val s_nb_folded_text = s_indent ~ ns_char ~ nb_char.rep
+    //[176]   l-nb-folded-lines(n)               ::= s-nb-folded-text(n) ( b-l-folded(n,block-in) s-nb-folded-text(n) )*
+    val l_nb_folded_lines = s_nb_folded_text ~ ( b_l_folded_Block ~ s_nb_folded_text ).rep
+    //[177]   s-nb-spaced-text(n)                ::= s-indent(n) s-white nb-char*
+    val s_nb_spaced_text = s_indent ~ s_white ~ nb_char.rep
+    //[178]   b-l-spaced(n)                      ::= b-as-line-feed l-empty(n,block-in)*
+    val b_l_spaced = b_as_line_feed ~ l_empty_rep
+    //[179]   l-nb-spaced-lines(n)               ::= s-nb-spaced-text(n) ( b-l-spaced(n) s-nb-spaced-text(n) )*
+    val l_nb_spaced_lines = s_nb_spaced_text ~ ( b_l_spaced ~ s_nb_spaced_text ).rep
+    //[180]   l-nb-same-lines(n)                 ::= l-empty(n,block-in)* ( l-nb-folded-lines(n) | l-nb-spaced-lines(n) )
+    val l_nb_same_lines = l_empty_rep ~ ( l_nb_folded_lines | l_nb_spaced_lines )
+    //[181]   l-nb-diff-lines(n)                 ::= l-nb-same-lines(n) ( b-as-line-feed l-nb-same-lines(n) )*
+    val l_nb_diff_lines = l_nb_same_lines ~ ( b_as_line_feed ~ l_nb_same_lines ).rep
+    //[182]   l-folded-content(n,t)              ::= ( l-nb-diff-lines(n) b-chomped-last(t) )? l-chomped-empty(n,t)
+    ( l_nb_diff_lines ~ b_chomped_last ).? ~ l_chomped_empty
+  }
 }
 
