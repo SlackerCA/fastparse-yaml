@@ -272,18 +272,15 @@ things that can be anchored (aliased) {
 
 
    
-@Scalar,Seq,Map,Empty
+@Alias,Scalar,Seq,Map
 [161]   ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
  [158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
 
-@Scalar,Seq,Map,Empty
+@Alias,Scalar
 [159]   ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
 
 @Scalar,Seq,Map
 [160]   c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
-
-
-
 
 
 
