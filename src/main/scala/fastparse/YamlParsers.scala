@@ -15,7 +15,7 @@ object YamlParsers {
   //[1]     c-printable                        ::= #x9 | #xA | #xD | [#x20-#x7E] /* 8 bit */ | #x85 | [#xA0-#xD7FF] | [#xE000-#xFFFD] /* 16 bit */ | [#x10000-#x10FFFF] /* 32 bit */
   val c_printable = CharIn(List('\u0009','\u000A','\u000D','\u0085'), ('\u0020' to '\u007E'), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD'))
   //[2]     nb-json                            ::= #x9 | [#x20-#x10FFFF]
-  val nb_json = CharIn(List('\u0009'), '\u0020' to '\uFFFF')
+  private val nb_json = CharIn(List('\u0009'), '\u0020' to '\uFFFF').!.opaque("nb_json")
   //[3]     c-byte-order-mark                  ::= #xFEFF
   val c_byte_order_mark = "\uFEFF"
 /*
@@ -57,7 +57,7 @@ val c_directive = "%"
 val c_reserved = "@" | "`"
 */
   //[22]    c-indicator                        ::= "-" | "?" | ":" | "," | "[" | "]" | "{" | "}" | "#" | "&" | "*" | "!" | "|" | ">" | "'" | """ | "%" | "@" | "`"
-  val c_indicator = CharIn("-?:,[]{}#&*!|>'\"%@`")
+  lazy val indicator = CharIn("-?:,[]{}#&*!|>'\"%@`")
   //[23]    c-flow-indicator                   ::= "," | "[" | "]" | "{" | "}"
   val c_flow_indicator = ",[]{}"
   //[24]    b-line-feed                        ::= #xA /* LF */
@@ -80,6 +80,7 @@ val c_reserved = "@" | "`"
   val s_tab = "\u0009"
   //[33]    s-white                            ::= s-space | s-tab
   val s_white = CharIn(" \\t")
+  val s_white_rep = s_white.rep
   //[34]    ns-char                            ::= nb-char - s-white
   val ns_char = CharIn(('\u0021' to '\u007E'), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD').diff(c_byte_order_mark)) //.!
   // ns-char - c-flow-indicator
@@ -133,23 +134,36 @@ val c_reserved = "@" | "`"
   //[58]    ns-esc-paragraph-separator         ::= "P"
   val ns_esc_paragraph_separator = "P"
   //[59]    ns-esc-8-bit                       ::= "x" ( ns-hex-digit × 2 )
-  val ns_esc_8_bit = "x" ~ ( ns_hex_digit.rep(min=2,max=2) )
+  //val ns_esc_8_bit = "x" ~ ( ns_hex_digit.rep(min=2,max=2) )
   //[60]    ns-esc-16-bit                      ::= "u" ( ns-hex-digit × 4 )
-  val ns_esc_16_bit = "u" ~ ( ns_hex_digit.rep(min=4,max=4) )
+  //val ns_esc_16_bit = "u" ~ ( ns_hex_digit.rep(min=4,max=4) )
   //[61]    ns-esc-32-bit                      ::= "U" ( ns-hex-digit × 8 )
-  val ns_esc_32_bit = "U" ~ ( ns_hex_digit.rep(min=8,max=8) )
+  //val ns_esc_32_bit = "U" ~ ( ns_hex_digit.rep(min=8,max=8) )
   //[62]    c-ns-esc-char                      ::= "\" ( ns-esc-null | ns-esc-bell | ns-esc-backspace | ns-esc-horizontal-tab | ns-esc-line-feed | ns-esc-vertical-tab | ns-esc-form-feed | ns-esc-carriage-return | ns-esc-escape | ns-esc-space | ns-esc-double-quote | ns-esc-slash | ns-esc-backslash | ns-esc-next-line | ns-esc-non-breaking-space | ns-esc-line-separator | ns-esc-paragraph-separator | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
   //val c_ns_esc_char = "\" ~ ( ns_esc_null | ns_esc_bell | ns_esc_backspace | ns_esc_horizontal_tab | ns_esc_line_feed | ns_esc_vertical_tab | ns_esc_form_feed | ns_esc_carriage_return | ns_esc_escape | ns_esc_space | ns_esc_double_quote | ns_esc_slash | ns_esc_backslash | ns_esc_next_line | ns_esc_non_breaking_space | ns_esc_line_separator | ns_esc_paragraph_separator | ns_esc_8_bit | ns_esc_16_bit | ns_esc_32_bit )
   private val ns_esc_map = Map(
-    "\\0" -> '\u0000',
-    "\\a" -> '\u0007',
-    "\\b" -> '\u0008',
-    "\\t" -> '\u0009'
+    "0" -> "\u0000",
+    "a" -> "\u0007",
+    "b" -> "\u0008",
+    "t" -> "\u0009",
+    "\t" -> "\u0009",
+    "n" -> "\n",
+    //...
+    "\"" -> "\"",
+    "\\" -> "\\"
     //TODO: map all escaped chars to values
   )
-  private val c_ns_esc_char_escaped = ("\\" ~ CharIn("0abt\tnvfre \"/\\N_LP").!.map(ns_esc_map.get(_)))
-  private val c_ns_esc_char_unicode = ("\\x" ~ ns_hex_digit.rep(min=2,max=2).!.map(Integer.parseInt(_, 4)) | "\\u" ~ ns_hex_digit.rep(min=4,max=4).!.map(Integer.parseInt(_, 8)) /*| "\\U" ~ hexDigit(8)*/)
-  val c_ns_esc_char = (c_ns_esc_char_escaped | c_ns_esc_char_unicode)
+
+  private def st = (s:String) => {println("****<"+s+">****"); s;}
+  private def sq = (s:Seq[Any]) => {println("****<"+(s.mkString)+">****"); s;}
+
+  private val c_ns_esc_char_escaped = P("\\" ~/ CharIn("0abt\tnvfre \"/\\N_LP").!.map(ns_esc_map))//.opaque("c_ns_esc_char_escaped")
+  private val c_ns_esc_char_unicode = P(
+    "\\x" ~/ ns_hex_digit.rep(min=2,max=2).!.map(Integer.parseInt(_, 4).toChar.toString) |
+    "\\u" ~/ ns_hex_digit.rep(min=4,max=4).!.map(Integer.parseInt(_, 8).toChar.toString)
+  /*| "\\U" ~ hexDigit(8)*/)
+  private val c_ns_esc_char:Parser[String] = P(c_ns_esc_char_escaped | c_ns_esc_char_unicode)//.opaque("c_ns_esc_char")
+   
 
 
   //[63]    s-indent(n)                        ::= s-space × n
@@ -225,28 +239,27 @@ val c_reserved = "@" | "`"
   //[106]   e-node                             ::= e-scalar
   val e_node = e_scalar
   //[107]   nb-double-char                     ::= c-ns-esc-char | ( nb-json - "\" - """ )
-  val nb_double_char = c_ns_esc_char | ( !(CharIn("\\-\"")) ~ nb_json  )
+  val nb_double_char:Parser[String] = c_ns_esc_char | ( !(CharIn("\\-\"")) ~ nb_json  )
   //[108]   ns-double-char                     ::= nb-double-char - s-white
-  val ns_double_char = !(s_white) ~ nb_double_char //.!
+  val ns_double_char = !(s_white) ~ nb_double_char
 
   //[111]   nb-double-one-line                 ::= nb-double-char*
-  val nb_double_one_line = nb_double_char.rep
+  val nb_double_one_line:Parser[Seq[String]] = nb_double_char.rep
   //[114]   nb-ns-double-in-line               ::= ( s-white* ns-double-char )*
-  val nb_ns_double_in_line = ( s_white.rep ~ ns_double_char ).rep
+  val nb_ns_double_in_line:Parser[Seq[String]] = ( s_white_rep ~ ns_double_char ).rep
 
   //[117]   c-quoted-quote                     ::= "'" "'"
-  val c_quoted_quote = "''"
+  //val c_quoted_quote = "''".map(Unit=>"'")
   //[118]   nb-single-char                     ::= c-quoted-quote | ( nb-json - "'" )
-  val nb_single_char = c_quoted_quote | ( !("'") ~ nb_json )
+  val nb_single_char = (P("''").map(Unit=>"'") | ( !("'") ~ nb_json ))
   //[119]   ns-single-char                     ::= nb-single-char - s-white
-  val ns_single_char = !(s_white) ~ nb_single_char
+  val ns_single_char:Parser[String] = !(s_white) ~ nb_single_char
 
   //[122]   nb-single-one-line                 ::= nb-single-char*
-  val nb_single_one_line = nb_single_char.rep
+  val nb_single_one_line:Parser[Seq[String]] = nb_single_char.rep
   //[123]   nb-ns-single-in-line               ::= ( s-white* ns-single-char )*
-  val nb_ns_single_in_line = ( s_white.rep ~ ns_single_char ).rep
-
-
+  val nb_ns_single_in_line:Parser[Seq[String]] = ( s_white_rep ~ ns_single_char ).rep
+  
   //[128]   ns-plain-safe-out                  ::= ns-char
   val ns_plain_safe_out = ns_char
   //[129]   ns-plain-safe-in                   ::= ns-char - c-flow-indicator
@@ -282,18 +295,18 @@ object YamlParser {
   def apply(indentation:Int, context:Context) = new YamlParser(indentation,context)
 }
 
-trait Context
-object BlockOut extends Context 
-object BlockIn extends Context
-object FlowOut extends Context
-object FlowIn extends Context
-object BlockKey extends Context
-object FlowKey extends Context
+abstract class Context
+case object BlockOut extends Context 
+case object BlockIn extends Context
+case object FlowOut extends Context
+case object FlowIn extends Context
+case object BlockKey extends Context
+case object FlowKey extends Context
 
 class Chomping
-object Strip extends Chomping
-object Clip extends Chomping
-object Keep extends Chomping
+case object Strip extends Chomping
+case object Clip extends Chomping
+case object Keep extends Chomping
 
 /** 
  *  Limitations:
@@ -329,9 +342,8 @@ class YamlParser (val indentation:Int, val context:Context) {
   //   case FlowOut  => s_flow_line_prefix
   //   case FlowIn   => s_flow_line_prefix
   // }
-
+ */
   //[70]    l-empty(n,c)                       ::= ( s-line-prefix(n,c) | s-indent(<n) ) b-as-line-feed
-  val l_empty_Flow =  s_space.rep ~ b_non_content
   // val l_empty = context match {
   //   case BlockOut => l_empty_Block
   //   case BlockIn  => l_empty_Block
@@ -343,11 +355,17 @@ class YamlParser (val indentation:Int, val context:Context) {
 
   //[73]    b-l-folded(n,c)                    ::= b-l-trimmed(n,c) | b-as-space
   //val b_l_folded = b_l_trimmed | b_as_space
-  val b_l_folded_Flow = ((b_non_content ~ l_empty_Flow.!.rep(1).map("\n" * _.length)) | b_as_space)
   //[74]    s-flow-folded(n)                   ::= s-separate-in-line? b-l-folded(n,flow-in) s-flow-line-prefix(n)
-  val s_flow_folded = separate_in_line.? ~ b_l_folded_Flow ~ s_flow_line_prefix
+
+  //b_non_content=((b_carriage_return ~ b_line_feed) | b_carriage_return | b_line_feed)
+   
+  private lazy val s_flow_folded:Parser[String] = {
+    val l_empty_Flow =  s_space.rep ~ b_non_content // " *\n"
+    val b_l_folded_Flow = ((b_non_content ~ l_empty_Flow.!.rep(1).map("\\n" * _.length)) | b_as_space)
+    separate_in_line.? ~ b_l_folded_Flow ~ s_flow_line_prefix
+  }
   // separate_in_line ::= s-white+ | /* Start of line */
- */
+
   //[80]    s-separate(n,c)                    ::= c = block-out ⇒ s-separate-lines(n)
   //                                               c = block-in  ⇒ s-separate-lines(n)
   //                                               c = flow-out  ⇒ s-separate-lines(n)
@@ -363,45 +381,50 @@ class YamlParser (val indentation:Int, val context:Context) {
 
   //[96]    c-ns-properties(n,c)               ::= ( c-ns-tag-property ( s-separate(n,c) c-ns-anchor-property )? ) | ( c-ns-anchor-property ( s-separate(n,c) c-ns-tag-property )? )
   val properties:Parser[Unit] = ( c_ns_tag_property ~ ( separate ~ c_ns_anchor_property ).? ) | ( c_ns_anchor_property ~ ( separate ~ c_ns_tag_property ).? )
-/*
-  //[109]   c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
-  val c_double_quoted:Parser[String] = "\"" ~/ nb_double_text.! ~ "\""
-  //[110]   nb-double-text(n,c)                ::= c = flow-out  ⇒ nb-double-multi-line(n)
-  //                                               c = flow-in   ⇒ nb-double-multi-line(n)
-  //                                               c = block-key ⇒ nb-double-one-line
-  //                                               c = flow-key  ⇒ nb-double-one-line
-  val nb_double_text = context match {
-    case BlockIn | BlockOut => nb_double_multi_line
-    case FlowOut | FlowIn  => nb_double_one_line
-  }
-  //[112]   s-double-escaped(n)                ::= s-white* "\" b-non-content l-empty(n,flow-in)* s-flow-line-prefix(n)
-  val s_double_escaped = s_white.rep ~ "\\" ~ b_non_content.map(Unit=>"\n") ~ (s_white.rep ~ b_non_content).rep ~ s_flow_line_prefix
-  //[113]   s-double-break(n)                  ::= s-double-escaped(n) | s-flow-folded(n)
-  val s_double_break = s_double_escaped | s_flow_folded
-  // both end with s_flow_line_prefix
-  //[115]   s-double-next-line(n)              ::= s-double-break(n) ( ns-double-char nb-ns-double-in-line ( s-double-next-line(n) | s-white* ) )?
-  //val s_double_next_line = (s_double_break ~ ( ns_double_char ~ nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep ) ).?)
-  val s_double_next_line = (s_double_break ~ (ns_double_char ~ nb_ns_double_in_line).!.?).rep ~ s_white.rep
 
-  //[116]   nb-double-multi-line(n)            ::= nb-ns-double-in-line ( s-double-next-line(n) | s-white* )
-  val nb_double_multi_line = nb_ns_double_in_line ~ ( s_double_next_line | s_white.rep )
-  //[120]   c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
-  val c_single_quoted:Parser[String] = "'" ~/ nb_single_text.! ~ "'"
-  //[121]   nb-single-text(n,c)                ::= c = flow-out  ⇒ nb-single-multi-line(n)
-  //                                               c = flow-in   ⇒ nb-single-multi-line(n)
-  //                                               c = block-key ⇒ nb-single-one-line
-  //                                               c = flow-key  ⇒ nb-single-one-line
-  val nb_single_text = context match {
-    case FlowOut  | FlowIn  => nb_single_multi_line
-    case BlockKey | FlowKey => nb_single_one_line
+  lazy val quoted:Parser[String] = {
+    val c_single_quoted = {
+      //[121]   nb-single-text(n,c)                ::= c = flow-out  ⇒ nb-single-multi-line(n)
+      //                                               c = flow-in   ⇒ nb-single-multi-line(n)
+      //                                               c = block-key ⇒ nb-single-one-line
+      //                                               c = flow-key  ⇒ nb-single-one-line
+      //[124]   s-single-next-line(n)              ::= s-flow-folded(n) ( ns-single-char nb-ns-single-in-line ( s-single-next-line(n) | s-white* ) )?
+      //[125]   nb-single-multi-line(n)            ::= nb-ns-single-in-line ( s-single-next-line(n) | s-white* )
+      val nb_single_text:Parser[String] = context match {
+        //TODO: folding
+        case FlowOut  | FlowIn  => nb_ns_single_in_line.map(_.mkString).rep(sep=(s_white_rep ~ b_non_content ~ s_white_rep)).map(_.mkString(" "))
+        case BlockKey | FlowKey => nb_single_one_line.map(_.mkString)
+      }
+      //[120]   c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
+      "'" ~/ nb_single_text ~ "'"
+    }
+
+    //[109]   c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
+    val c_double_quoted:Parser[String] = {
+      //[110]   nb-double-text(n,c)                ::= c = flow-out  ⇒ nb-double-multi-line(n)
+      //                                               c = flow-in   ⇒ nb-double-multi-line(n)
+      //                                               c = block-key ⇒ nb-double-one-line
+      //                                               c = flow-key  ⇒ nb-double-one-line
+      val nb_double_text = context match {
+        case FlowOut | FlowIn  => {
+          //[112]   s-double-escaped(n)                ::= s-white* "\" b-non-content l-empty(n,flow-in)* s-flow-line-prefix(n)
+          val s_double_escaped = s_white_rep ~ "\\" ~ b_non_content.map(Unit=>"\n") ~ (s_white_rep ~ b_non_content).rep ~ s_flow_line_prefix
+          //[113]   s-double-break(n)                  ::= s-double-escaped(n) | s-flow-folded(n)
+          //[115]   s-double-next-line(n)              ::= s-double-break(n) ( ns-double-char nb-ns-double-in-line ( s-double-next-line(n) | s-white* ) )?
+          val s_double_next_line = ((s_double_escaped | s_flow_folded) ~ (ns_double_char ~ nb_ns_double_in_line).?).rep.! ~ s_white_rep
+          //[116]   nb-double-multi-line(n)            ::= nb-ns-double-in-line ( s-double-next-line(n) | s-white* )
+          nb_ns_double_in_line ~ ( s_double_next_line | s_white_rep )
+          nb_double_one_line
+        }
+        case BlockKey | FlowKey => nb_double_one_line
+      }
+      "\"" ~/ nb_double_text.map(_.mkString) ~ "\""
+    }
+
+
+    c_single_quoted | c_double_quoted
   }
-  //[124]   s-single-next-line(n)              ::= s-flow-folded(n) ( ns-single-char nb-ns-single-in-line ( s-single-next-line(n) | s-white* ) )?
-  val s_single_next_line = (s_flow_folded ~ (ns_single_char ~ nb_ns_single_in_line).!.?).rep ~ s_white.rep
-  //[125]   nb-single-multi-line(n)            ::= nb-ns-single-in-line ( s-single-next-line(n) | s-white* )
-  val nb_single_multi_line = nb_ns_single_in_line ~ ( s_single_next_line | s_white.rep )
-  //[126]   ns-plain-first(c)                  ::= ( ns-char - c-indicator ) | ( ( "?" | ":" | "-" ) /* Followed by an ns-plain-safe(c)) */ )
-  val ns_plain_first = ( !c_indicator ~ ns_char.! ) | ( CharIn("?:-").! ~ &(ns_plain_safe))
-*/
+
   //[127]   ns-plain-safe(c)                   ::= c = flow-out  ⇒ ns-plain-safe-out
   //                                               c = flow-in   ⇒ ns-plain-safe-in
   //                                               c = block-key ⇒ ns-plain-safe-out
@@ -410,33 +433,38 @@ class YamlParser (val indentation:Int, val context:Context) {
     case FlowOut | BlockKey => ns_plain_safe_out
     case FlowIn  | FlowKey  => ns_plain_safe_in
   }
-/*
-  //[130]   ns-plain-char(c)                   ::= ( ns-plain-safe(c) - ":" - "#" ) | ( /* An ns-char preceding */ "#" ) | ( ":" /* Followed by an ns-plain-safe(c) */ )
-  val ns_plain_char = (!CharIn(":#") ~ ns_plain_safe) | /*TODO: An ns-char preceding “#” */ Fail | ":" ~ &(ns_plain_safe)
+
 
   //[131]   ns-plain(n,c)                      ::= c = flow-out  ⇒ ns-plain-multi-line(n,c)
   //                                               c = flow-in   ⇒ ns-plain-multi-line(n,c)
   //                                               c = block-key ⇒ ns-plain-one-line(c)
   //                                               c = flow-key  ⇒ ns-plain-one-line(c)
-  val ns_plain:Parser[String] = context match {
-    case FlowOut  | FlowIn  => ns_plain_multi_line
-    case BlockKey | FlowKey => ns_plain_one_line
+  lazy val plain = {
+    //[126]   ns-plain-first(c)                  ::= ( ns-char - c-indicator ) | ( ( "?" | ":" | "-" ) /* Followed by an ns-plain-safe(c)) */ )
+    val amp_plain_safe = &(plain_safe)
+    val ns_plain_first = ( !indicator ~ ns_char ) | ( CharIn("?:-") ~ amp_plain_safe)
+    //[130]   ns-plain-char(c)                   ::= ( ns-plain-safe(c) - ":" - "#" ) | ( /* An ns-char preceding */ "#" ) | ( ":" /* Followed by an ns-plain-safe(c) */ )
+    val ns_plain_char = (!CharIn(":#") ~ plain_safe) | /*TODO: An ns-char preceding “#” */ Fail | ":" ~ amp_plain_safe
+    //[132]   nb-ns-plain-in-line(c)             ::= ( s-white* ns-plain-char(c) )*
+    val nb_ns_plain_in_line = ( s_white_rep ~ ns_plain_char ).rep
+    //[133]   ns-plain-one-line(c)               ::= ns-plain-first(c) nb-ns-plain-in-line(c)
+    val ns_plain_one_line = (ns_plain_first ~ nb_ns_plain_in_line)
+    //[134]   s-ns-plain-next-line(n,c)          ::= s-flow-folded(n) ns-plain-char(c) nb-ns-plain-in-line(c)
+    //val s_ns_plain_next_line = s_flow_folded ~ ns_plain_char ~ nb_ns_plain_in_line
+    //[135]   ns-plain-multi-line(n,c)           ::= ns-plain-one-line(c) s-ns-plain-next-line(n,c)*
+    //val ns_plain_multi_line:Parser[String] =
+    context match {
+      case FlowOut  | FlowIn  => ns_plain_one_line ~ (s_flow_folded ~ ns_plain_char ~ nb_ns_plain_in_line)
+      case BlockKey | FlowKey => ns_plain_one_line
+    }
   }
-  //[132]   nb-ns-plain-in-line(c)             ::= ( s-white* ns-plain-char(c) )*
-  val nb_ns_plain_in_line = ( s_white.rep ~ ns_plain_char ).rep
-  //[133]   ns-plain-one-line(c)               ::= ns-plain-first(c) nb-ns-plain-in-line(c)
-  val ns_plain_one_line:Parser[String] = (ns_plain_first ~ nb_ns_plain_in_line).!
-  //[134]   s-ns-plain-next-line(n,c)          ::= s-flow-folded(n) ns-plain-char(c) nb-ns-plain-in-line(c)
-  val s_ns_plain_next_line = s_flow_folded ~ ns_plain_char ~ nb_ns_plain_in_line
-  //[135]   ns-plain-multi-line(n,c)           ::= ns-plain-one-line(c) s-ns-plain-next-line(n,c)*
-  val ns_plain_multi_line:Parser[String] = (ns_plain_one_line ~ s_ns_plain_next_line.rep).!
- */
+
   //[136]   in-flow(c)                         ::= c = flow-out  ⇒ flow-in
   //                                               c = flow-in   ⇒ flow-in
   //                                               c = block-key ⇒ flow-key
   //                                               c = flow-key  ⇒ flow-key
-  val in_flow = context match {
-    case FlowOut  | FlowIn => FlowIn
+  lazy val in_flow = context match {
+    case FlowOut | FlowIn => FlowIn
     case BlockKey | FlowKey => FlowKey
   }
 /*

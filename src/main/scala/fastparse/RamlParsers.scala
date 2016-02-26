@@ -2,7 +2,7 @@ package fastparse.yaml
 
 import fastparse.all._
 
-object Main //extends App
+object Main extends App
 {
 //  val char(c:Char):Boolean = List(('\u0009','\u0085'),('\u0020' to '\u007E'),('\u00A0' to '\uD7FF'),('\uE000' to '\uFFFD')).forAll(_.contains(c))
   //('\u0021' to '\u007E').diff("-?:,[]{}#&*!|>'\"%@`")//.foreach(print)
@@ -22,6 +22,7 @@ object Main //extends App
 // foo: Foo
 // description: Description"""))
 //println(Raml("{ a:b, c:d }"))
+  /*
   val kv = P(CharIn('a' to 'z').rep.! ~ ": " ~ CharIn('a' to 'z').rep.!)
   val p = P( "{" ~ kv ~ "}" ).parse("{foo: bar}")
   println(p match {
@@ -29,6 +30,19 @@ object Main //extends App
     case Parsed.Success(x, _) => "Success:" + x
     case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
   })
+   */
+
+  for(a <- List(
+    "\"a\nb\"", """"\n""""
+    ,"'ab'", "'a\nb'", "'a\n\n\nb'"
+  )) {
+    val p = new YamlParser(0,FlowOut).quoted.parse(a)
+    println(p match {
+      case Parsed.Success(x, _) => "Success: \"" + x +"\""
+      case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
+    })
+  }
+  
 }
 /*
 class RamlParser {
@@ -309,7 +323,7 @@ collect
 
 
 
-  */
+
 class Resource
 class Type
 
@@ -320,3 +334,4 @@ class Raml {
   types: List[Type]
 }
 
+  */

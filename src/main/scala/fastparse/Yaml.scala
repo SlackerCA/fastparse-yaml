@@ -288,18 +288,37 @@ class MapElement[K,V] (val pairs:Seq[(Element[K], Element[V])]) extends Element[
 //   [199]   s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
 //    [170]   c-l+literal(n)                     ::= “|” c-b-block-header(m,t) l-literal-content(n+m,t)
 //     [173]   l-literal-content(n,t)             ::= ( l-nb-literal-text(n) b-nb-literal-next(n)* b-chomped-last(t) )? l-chomped-empty(n,t)
-/*
-class ScalarParsers[T]{
-  def block_node(y:Y) = {
-    val y1 = Y(y.indent+1,y.context)
-    val block_scalar = y.separate ( y1.properties ~ y1.separate )? ( literal(y) | c-l+folded(n) )
+class TextElement (val text:String) extends Element[String] {
+  import YamlParsers._
 
+  val filter = text.== _
+
+  //override def block_node(y:Y)// = y.block_node.filter(filter).!
+  // [185]   s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
+  //  [186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
+  //  [195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
+  //override def block_indented(y:Y)// = y.block_indented.filter(filter).!
+
+  override lazy val e_node = if(text.isEmpty) Pass.map(Unit=>"") else Fail
+
+  override def yaml_content(y:Y):Parser[String] = y.plain.filter(filter).!
+
+  override def json_content(y:Y):Parser[String] = y.quoted.filter(filter)
+
+  // [159]   ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
+  override def yaml_node(y:Y):Parser[String] = {
+    val yaml_content_y = yaml_content(y)
+    yaml_content_y | ( y.properties ~ ( ( y.separate ~ yaml_content_y ) | e_node ) )
   }
+    //y.alias_node ~/ Fail |
+    //TODO: in scalar flow_yaml_content | ( y.properties ~ P( ( y.separate ~ flow_yaml_content ) | e_scalar ) )
 
-  def block_indented(y:Y) = {}
-  def yaml_content(y:Y) = {}
-  def json_content(y:Y) = {}
+
+  // [161]   ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
+  //  [158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+  //override def flow_node(y:Y):Parser[String]// = y.flow_node.filter(filter).!
 }
+/*
 
 abstract class ObjectElement[T :< Product] extends Element[T]{
 def map[T](f:T=>O)
