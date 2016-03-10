@@ -33,8 +33,16 @@ object Main extends App
    */
 
   for(a <- List(
-    "\"a\nb\"", """"\n""""
-    ,"'ab'", "'a\nb'", "'a\n\n\nb'"
+    "\"a\nb\"", """"\n"""",
+    "''", "' '", "'abc'", "'a b\tc'",
+    "'a\nb'",
+    "'a\n\nb'",
+    "'  a'",
+    "'a  '",
+    "'  a  \n  b  '",
+    "'  \na\nb\n  '",
+    "'that''s'"
+
   )) {
     val p = new YamlParser(0,FlowOut).quoted.parse(a)
     println(p match {
