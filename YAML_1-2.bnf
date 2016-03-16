@@ -80,7 +80,7 @@
 						c = flow-out  ⇒ s-flow-line-prefix(n)
 						c = flow-in   ⇒ s-flow-line-prefix(n)
  [68]    s-block-line-prefix(n)             ::= s-indent(n)
- [69]    s-flow-line-prefix(n)              ::= s-indent(n) s-separate-in-line?
+[69]    s-flow-line-prefix(n)              ::= s-indent(n) s-separate-in-line?
 
 
 
