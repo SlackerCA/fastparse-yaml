@@ -101,6 +101,9 @@ val c_reserved = "@" | "`"
 
   //[34]    ns-char                            ::= nb-char - s-white
   val ns_char = CharIn(('\u0021' to '\u007E'), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD').diff(c_byte_order_mark)).opaque("ns_char")
+  // non ns_char => non-non-space-char => space-char => 
+  // s_char = c-printable - (b-line-feed | b-carriage-return) - c-byte-order-mark - (s-space | s-tab)
+  val s_char = CharIn("\n\r \t").opaque("s_char")
   // ns-char - c-flow-indicator
   val ns_char_c_flow_indicator = CharIn(('\u0021' to '\u007E').diff(c_flow_indicator), ('\u00A0' to '\uD7FF'), ('\uE000' to '\uFFFD').diff(c_byte_order_mark)).opaque("ns_char - c_flow_indicator")
   //[35]    ns-dec-digit                       ::= [#x30-#x39] /* 0-9 */
@@ -335,12 +338,12 @@ case object Keep extends Chomping
   * 
   */
 class YamlParser (val indentation:Int, val context:Context) {
+  // Better names for these?
   def apply(context:Context) = if(context==this.context) this else YamlParser(this.indentation,context)
   def apply(indentation:Int) = if(indentation==this.indentation) this else YamlParser(indentation,this.context)
-  def +(indentation:Int) = YamlParser(this.indentation + indentation, this.context)
+  def +(indentation:Int) = if(indentation==this.indentation) this else YamlParser(this.indentation + indentation,this.context)
 
   import YamlParsers._
-
 
   //[63]    s-indent(n)                        ::= s-space × n
   val indent = YamlParsers.indent(indentation)
@@ -626,8 +629,6 @@ class YamlParser (val indentation:Int, val context:Context) {
     val s_l_block_collection_properties_impl = (( separate ~ c_ns_properties ).?)
     val s_l_block_collection_properties = P(Y(indentation+1).s_l_block_collection_properties_impl)
     //val s_l_block_collection_properties_Optomization = &(comments | separate_in_line).flatMap(Unit=>Y(indentation+1).s_l_block_collection_properties_impl)
-    //[201]   seq-spaces(n,c)                    ::= c = block-out ⇒ n-1
-    //                                               c = block-in  ⇒ n
     val l_block_sequence_seq_spaces = context match {
       case BlockOut => YamlParser(indentation-1,BlockOut).l_block_sequence
       case BlockIn => l_block_sequence
@@ -641,8 +642,18 @@ class YamlParser (val indentation:Int, val context:Context) {
   }
  */
 
+  //[201]   seq-spaces(n,c)                    ::= c = block-out ⇒ n-1
+  //                                               c = block-in  ⇒ n
+  val seq_spaces = context match {
+    case BlockOut => YamlParsers.indent_more(indentation - 1)
+    case BlockIn => indent_more
+  }
 
+  private val _block_scalar_preamble = separate ~ ( properties ~ separate ).? ~ CharIn("|<")
+  def block_scalar_preamble:Parser[Unit] = this(indentation+1)._block_scalar_preamble
 
+  private val _block_collection_preamble = ( properties ~ separate ).? ~ comments
+  def block_collection_preamble:Parser[Unit] = this(indentation+1)._block_collection_preamble
 
   //[199]   s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
   private val s_l_block_scalar_pre:Parser[Unit] = (separate ~ ( properties ~ separate ).?) | Pass
@@ -653,7 +664,7 @@ class YamlParser (val indentation:Int, val context:Context) {
     //[174]   c-l+folded(n)                      ::= ">" c-b-block-header(m,t) l-folded-content(n+m,t)
     val c_l_folded:Parser[String] = (">" ~/ c_b_block_header.flatMap(_.l_folded_content))//.log("c_l_folded")
 
-    (P(this(indentation+1).s_l_block_scalar_pre) ~ ( c_l_literal | c_l_folded ))//.log("block_scalar")
+    (P(this(indentation+1).block_scalar_pre) ~ ( c_l_literal | c_l_folded ))//.log("block_scalar")
   }
   
  /*
