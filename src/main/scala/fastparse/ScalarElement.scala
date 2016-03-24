@@ -34,7 +34,7 @@ class ScalarElement(val filter:(String => Boolean)) extends Element[String] {
     y.block_scalar | P(flow_in_block(YamlParser(y.indentation+1,FlowOut)))
   }
   //  [197]   s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
-  private def flow_in_block(y:Y) = (y.separate ~ flow_node(y) ~ comments).log("flow_in_block")
+  private def flow_in_block(y:Y) = (y.separate ~ flow_node(y) ~ comments)//.log("flow_in_block")
 
   // [161]   ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  [158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)

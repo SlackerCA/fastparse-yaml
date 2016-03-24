@@ -617,10 +617,10 @@ class YamlParser (val indentation:Int, val context:Context) {
   val ns_l_compact_mapping = ns_l_block_map_entry ~ ( s_indent ~ ns_l_block_map_entry ).rep
 
 
-
+ */
   //[196]   s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   private val s_l_flow_in_block_impl = separate ~ ns_flow_node ~ comments
-  val block_node = {
+  lazy val block_node:Parser[AnyRef] = {
     //[197]   s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
     //val s_l_flow_in_block_Optomization = &(comments | separate_in_line).flatMap(Unit=>Y(indentation+1,FlowOut).s_l_flow_in_block_impl)
     val s_l_flow_in_block = P(YamlParser(indentation+1,FlowOut).s_l_flow_in_block_impl)
@@ -640,23 +640,23 @@ class YamlParser (val indentation:Int, val context:Context) {
 
     s_l_block_in_block | s_l_flow_in_block
   }
- */
+
 
   //[201]   seq-spaces(n,c)                    ::= c = block-out ⇒ n-1
   //                                               c = block-in  ⇒ n
-  val seq_spaces = context match {
+  lazy val seq_spaces = context match {
     case BlockOut => YamlParsers.indent_more(indentation - 1)
     case BlockIn => indent_more
   }
 
-  private val _block_scalar_preamble = separate ~ ( properties ~ separate ).? ~ CharIn("|<")
-  def block_scalar_preamble:Parser[Unit] = this(indentation+1)._block_scalar_preamble
+  private val _block_scalar_preamble = separate ~ ( properties ~ separate ).? ~ &(CharIn("|>"))
+  lazy val block_scalar_preamble:Parser[Unit] = this(indentation+1)._block_scalar_preamble
 
   private val _block_collection_preamble = ( properties ~ separate ).? ~ comments
-  def block_collection_preamble:Parser[Unit] = this(indentation+1)._block_collection_preamble
+  lazy val block_collection_preamble:Parser[Unit] = this(indentation+1)._block_collection_preamble
 
   //[199]   s-l+block-scalar(n,c)              ::= s-separate(n+1,c) ( c-ns-properties(n+1,c) s-separate(n+1,c) )? ( c-l+literal(n) | c-l+folded(n) )
-  private val s_l_block_scalar_pre:Parser[Unit] = (separate ~ ( properties ~ separate ).?) | Pass
+  //private val s_l_block_scalar_pre:Parser[Unit] = (separate ~ ( properties ~ separate ).?)|Pass
   val block_scalar:Parser[String] = {
     //[170]   c-l+literal(n)                     ::= "|" c-b-block-header(m,t) l-literal-content(n+m,t)
     //val c_l_literal:Parser[String] = "|" ~ c_b_block_header.flatMap(_.l_literal_content)
@@ -664,7 +664,7 @@ class YamlParser (val indentation:Int, val context:Context) {
     //[174]   c-l+folded(n)                      ::= ">" c-b-block-header(m,t) l-folded-content(n+m,t)
     val c_l_folded:Parser[String] = (">" ~/ c_b_block_header.flatMap(_.l_folded_content))//.log("c_l_folded")
 
-    (P(this(indentation+1).block_scalar_pre) ~ ( c_l_literal | c_l_folded ))//.log("block_scalar")
+    (P(block_scalar_preamble) ~ ( c_l_literal | c_l_folded ))//.log("block_scalar")
   }
   
  /*

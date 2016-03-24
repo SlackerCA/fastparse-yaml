@@ -4,7 +4,7 @@ import fastparse.core.Parsed //https://github.com/lihaoyi/fastparse/issues/34
 
 import org.scalatest.FunSuite
 import org.scalatest.Assertions._
-import org.scalatest.Ignore
+import org.scalatest.{Ignore,DoNotDiscover}
 
 trait ParserTest { this: FunSuite =>
   def testParse(parser:Parser[String])(cases:(String,String)*):Unit = for(t <- cases) testParse(t._1, t._2)(parser)
@@ -42,7 +42,7 @@ class TerminalParserTests extends FunSuite with ParserTest {
 }
 */
 
-/*
+
 trait QuotedTest { this: FunSuite =>
   val parserBlockKey:Parser[String] = new YamlParser(0,BlockKey).quoted
   val parserFlowOut:Parser[String] = new YamlParser(0,FlowOut).quoted
@@ -69,7 +69,7 @@ trait QuotedTest { this: FunSuite =>
     }
   }
 }
-
+//@DoNotDiscover
 class SingleQuotedScalarTests extends FunSuite with QuotedTest {
   override def quoted(s:String) = '\'' + s + '\''
   testsFor (
@@ -86,7 +86,7 @@ class SingleQuotedScalarTests extends FunSuite with QuotedTest {
     "that''s" -> "that's"
   )
 }
-
+//@DoNotDiscover
 class DoubleQuotedScalarTests extends FunSuite with QuotedTest {
   override def quoted(s:String) = '"' + s + '"'
   testsFor (
@@ -103,7 +103,7 @@ class DoubleQuotedScalarTests extends FunSuite with QuotedTest {
     "a\\nb" -> "a\nb"
   )
 }
-
+//@DoNotDiscover
 class PlainScalarTests extends FunSuite with ParserTest {
   testParse (new YamlParser(0,FlowOut).plain)(
     //"" -> "",
@@ -118,7 +118,7 @@ class PlainScalarTests extends FunSuite with ParserTest {
     "?a" -> "?a"
   )
 }
-
+//@DoNotDiscover
 class BlockScalarTests extends FunSuite with ParserTest {
   testParse(new YamlParser(1, FlowOut).block_scalar)(
     "|\n  a" -> "a",
@@ -138,24 +138,31 @@ class BlockScalarTests extends FunSuite with ParserTest {
     "|\n  \u271d" -> "\u271d"
   )
 }
- */
+
+//@DoNotDiscover
 class YamlApiTests extends FunSuite {
   import Yaml._
   test("scalar") {
     assertResult("foo"){doc(scalar).parse("foo")}
   }
   test("map") {
-    assertResult(Map("foo"->"bar")){doc(map("foo"->AnyScalar)).parse("foo : bar")}
+    assertResult(Map("foo"->"bar")){
+      doc("foo"->scalar).parse("foo : bar")
+    }
   }
   test("typical map doc") {
     assertResult(Map("foo"->"bar","bar"->"foo")){
-      doc("foo"->AnyScalar, "bar"->AnyScalar)
+      doc("foo"->scalar, "bar"->scalar)
         .parse("foo : bar\nbar : foo")}
   }
   test("nested map") {
-    assertResult(Map("foo"->Map("bar"->"baz"))){
-      doc("foo"-> map("bar"->AnyScalar))
-        .parse("foo : \n bar : baz")}
+    assertResult(Map("foo"->Map("bar"->"blitz"))){
+      doc(
+        "foo"-> map(
+          "bar"->scalar,
+          "baz"->scalar)
+      )
+        .parse("foo : \n bar : blitz\n")}
   }
 
 }

@@ -1,4 +1,12 @@
 /*
+=Use Cases=
+The Yaml "schema" is already defined, and I need to read the file.
+
+By defining what is expected, we generate better error messages.
+ - Required values is missing.
+ - Value isn't the expected type (map, sequence, or scalar).
+
+(Use a Parser[AnyRef], and keep the Success object so that we can still reference where in the source text the problem seems to be?)
 
 =Design Goals=
 - easy to learn, ideal for one time use
@@ -45,15 +53,16 @@ either() can not mix element types (simple)
 anyof() can mix types (complex)
 
 =======
-just produce case classes (list,map,scalar) for second pass parsing
+just produce case classes (list,map,scalar) for second pass parsing?
 parse() calls match
 
+val raml = MutableRaml
 import Yaml._
 document(
 "title"->string,
-"documentation" -> listOf(map...)
+"documentation" -> seq(map...)
 "annotations"-> map(
-(string -> map)(match { case (k:String,v:Map) if k.startsWith("/") => (k,v)})
+(string.filter(_.startsWith("/") -> map) match { case (k:String,v:Map) if k.startsWith("/") => (k,v)}
 )()
 
 ) match {
@@ -68,14 +77,14 @@ import fastparse.all._
 
 object Yaml {
   //def apply(pairs:(Element[K], Element[T])*):T = doc(map(pairs))
-  def doc[T](root:Element[T]) = new Document[T](root)
-  def doc[K,T](pairs:(Element[K], Element[T])*):Document[Map[K,T]] = new Document[T](map(pairs:_*))
-  implicit def map[K,T](pairs:(Element[K], Element[T])*):MapElement[K,T] = new MapElement(pairs)
+  def doc[T](root:Element[T]) = new Document(root)
+  def doc[K,T](pairs:(Element[K], Element[T])*):Document[Map[K,T]] = new Document(map(pairs:_*))
   val scalar:Element[String] = new ScalarElement(s=>true) // AnyScalar
   implicit def scalar(text:String):Element[String] = new ScalarElement(text.== _)
   implicit def scalarScalar(t:(String,String)):(Element[String],Element[String]) = (scalar(t._1),scalar(t._2))
   implicit def scalarElement[T](t:(String,Element[T])):(Element[String],Element[T]) = (scalar(t._1),t._2)
   implicit def elementScalar[T](t:(Element[T],String)):(Element[T],Element[String]) = (t._1,scalar(t._2))
+  val map:Element[Map[String,String]] = new MapElement(scalar->scalar)
 }
 
 class Document[T] (root:Element[T]) {
@@ -112,20 +121,21 @@ abstract class Element[T] {
 
   // [159]   ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
   def yaml_node(y:Y):Parser[T] = Fail
-    //y.alias_node ~/ Fail |
-    //TODO: in scalar flow_yaml_content | ( y.properties ~ P( ( y.separate ~ flow_yaml_content ) | e_scalar ) )
+  //y.alias_node ~/ Fail |
+  //TODO: in scalar flow_yaml_content | ( y.properties ~ P( ( y.separate ~ flow_yaml_content ) | e_scalar ) )
 
 
   // [161]   ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
   //  [158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
   def flow_node(y:Y):Parser[T] = Fail
-    //val flow_content = yaml_content(y) | P(json_content(y))
-    //alias_node ~/ Fail |    
-    //TODO: in salar flow_content | ( y.properties ~ P( ( y.separate ~ flow_content ) | e_scalar ) )
+  //val flow_content = yaml_content(y) | P(json_content(y))
+  //alias_node ~/ Fail |
+  //TODO: in salar flow_content | ( y.properties ~ P( ( y.separate ~ flow_content ) | e_scalar ) )
 
   // [160]   c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
   def json_node(y:Y):Parser[T] = (y.properties ~ y.separate).? ~ json_content(y)
 }
+
 
 /*
 

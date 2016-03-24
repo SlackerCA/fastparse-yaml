@@ -13,7 +13,8 @@ class SequenceElement[T] (val elements:Seq[Element[T]]) extends Element[Seq[T]]{
     val not_block_scalar = !( y.block_scalar_preamble )
     //val not_block_seq_entry =  !(y.indent_more ~ "-" ~ CharIn(" \t\n\r")) // cache me
     val block_in_block =
-      not_block_scalar ~ y.block_collection_preamble ~
+      not_block_scalar ~
+      y.block_collection_preamble ~
       Peek(y.seq_spaces ~ "-" ~ s_char).flatMap((n:Int)=>block_sequence(y(n)))
 
     val y1FO = YamlParser(y.indentation+1,FlowOut)
@@ -22,8 +23,11 @@ class SequenceElement[T] (val elements:Seq[Element[T]]) extends Element[Seq[T]]{
     block_in_block | flow_in_block
   }
 
-  private def block_sequence(y:Y){
-
+  private def block_sequence(y:Y):Parser[Seq[T]] = {
+    val yBlockIn = y(BlockIn)
+    (y.indent ~ "-" ~ s_char ~ either( 
+      for(element <- elements) yield (element.block_indented(yBlockIn))
+    )).rep(1)
   }
 
 /*
