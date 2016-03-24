@@ -617,7 +617,7 @@ class YamlParser (val indentation:Int, val context:Context) {
   val ns_l_compact_mapping = ns_l_block_map_entry ~ ( s_indent ~ ns_l_block_map_entry ).rep
 
 
- */
+
   //[196]   s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
   private val s_l_flow_in_block_impl = separate ~ ns_flow_node ~ comments
   lazy val block_node:Parser[AnyRef] = {
@@ -640,7 +640,7 @@ class YamlParser (val indentation:Int, val context:Context) {
 
     s_l_block_in_block | s_l_flow_in_block
   }
-
+ */
 
   //[201]   seq-spaces(n,c)                    ::= c = block-out ⇒ n-1
   //                                               c = block-in  ⇒ n

@@ -138,8 +138,8 @@ class BlockScalarTests extends FunSuite with ParserTest {
     "|\n  \u271d" -> "\u271d"
   )
 }
-
-//@DoNotDiscover
+/*
+@DoNotDiscover
 class YamlApiTests extends FunSuite {
   import Yaml._
   test("scalar") {
@@ -166,6 +166,7 @@ class YamlApiTests extends FunSuite {
   }
 
 }
+*/
 //TODO: tests for unsupported features like aliases
 
 /* TODO: tag not run by default
