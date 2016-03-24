@@ -69,10 +69,13 @@ import fastparse.all._
 object Yaml {
   //def apply(pairs:(Element[K], Element[T])*):T = doc(map(pairs))
   def doc[T](root:Element[T]) = new Document[T](root)
-  def map[K,T](pairs:(Element[K], Element[T])*):MapElement[K,T] = new MapElement(pairs)
+  def doc[K,T](pairs:(Element[K], Element[T])*):Document[Map[K,T]] = new Document[T](map(pairs:_*))
+  implicit def map[K,T](pairs:(Element[K], Element[T])*):MapElement[K,T] = new MapElement(pairs)
   val scalar:Element[String] = new ScalarElement(s=>true) // AnyScalar
-  def scalar(text:String):Element[String] = new ScalarElement(text.== _)
-  def scalar(filter:(String => Boolean)):Element[String] = new ScalarElement(filter)
+  implicit def scalar(text:String):Element[String] = new ScalarElement(text.== _)
+  implicit def scalarScalar(t:(String,String)):(Element[String],Element[String]) = (scalar(t._1),scalar(t._2))
+  implicit def scalarElement[T](t:(String,Element[T])):(Element[String],Element[T]) = (scalar(t._1),t._2)
+  implicit def elementScalar[T](t:(Element[T],String)):(Element[T],Element[String]) = (t._1,scalar(t._2))
 }
 
 class Document[T] (root:Element[T]) {
@@ -123,7 +126,6 @@ abstract class Element[T] {
   // [160]   c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
   def json_node(y:Y):Parser[T] = (y.properties ~ y.separate).? ~ json_content(y)
 }
-
 
 /*
 

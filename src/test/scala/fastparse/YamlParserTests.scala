@@ -1,11 +1,10 @@
 package fastparse.yaml
-import fastparse.all.{Parsed,Parser}
+import fastparse.all.{Parser}
+import fastparse.core.Parsed //https://github.com/lihaoyi/fastparse/issues/34
 
 import org.scalatest.FunSuite
-import scala.collection.mutable.Stack
 import org.scalatest.Assertions._
 import org.scalatest.Ignore
-
 
 trait ParserTest { this: FunSuite =>
   def testParse(parser:Parser[String])(cases:(String,String)*):Unit = for(t <- cases) testParse(t._1, t._2)(parser)
@@ -43,6 +42,7 @@ class TerminalParserTests extends FunSuite with ParserTest {
 }
 */
 
+/*
 trait QuotedTest { this: FunSuite =>
   val parserBlockKey:Parser[String] = new YamlParser(0,BlockKey).quoted
   val parserFlowOut:Parser[String] = new YamlParser(0,FlowOut).quoted
@@ -138,12 +138,26 @@ class BlockScalarTests extends FunSuite with ParserTest {
     "|\n  \u271d" -> "\u271d"
   )
 }
-
+ */
 class YamlApiTests extends FunSuite {
   import Yaml._
-  test("string") {
+  test("scalar") {
     assertResult("foo"){doc(scalar).parse("foo")}
   }
+  test("map") {
+    assertResult(Map("foo"->"bar")){doc(map("foo"->AnyScalar)).parse("foo : bar")}
+  }
+  test("typical map doc") {
+    assertResult(Map("foo"->"bar","bar"->"foo")){
+      doc("foo"->AnyScalar, "bar"->AnyScalar)
+        .parse("foo : bar\nbar : foo")}
+  }
+  test("nested map") {
+    assertResult(Map("foo"->Map("bar"->"baz"))){
+      doc("foo"-> map("bar"->AnyScalar))
+        .parse("foo : \n bar : baz")}
+  }
+
 }
 //TODO: tests for unsupported features like aliases
 

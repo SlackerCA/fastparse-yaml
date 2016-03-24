@@ -31,7 +31,7 @@ object Main extends App
     case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
   })
    */
-
+/*
   for(a <- List(
     "\"a\nb\"", """"\n"""",
     "''", "' '", "'abc'", "'a b\tc'",
@@ -50,7 +50,7 @@ object Main extends App
       case fail @ Parsed.Failure(_,_,_) => "Fail:" + fail.msg
     })
   }
-  
+ */
 }
 /*
 class RamlParser {
