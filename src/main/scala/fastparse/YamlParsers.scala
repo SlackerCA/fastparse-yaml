@@ -161,7 +161,7 @@ val c_reserved = "@" | "`"
   //[61]    ns-esc-32-bit                      ::= "U" ( ns-hex-digit × 8 )
   //val ns_esc_32_bit = "U" ~ ( ns_hex_digit.rep(min=8,max=8) )
   //[62]    c-ns-esc-char                      ::= "\" ( ns-esc-null | ns-esc-bell | ns-esc-backspace | ns-esc-horizontal-tab | ns-esc-line-feed | ns-esc-vertical-tab | ns-esc-form-feed | ns-esc-carriage-return | ns-esc-escape | ns-esc-space | ns-esc-double-quote | ns-esc-slash | ns-esc-backslash | ns-esc-next-line | ns-esc-non-breaking-space | ns-esc-line-separator | ns-esc-paragraph-separator | ns-esc-8-bit | ns-esc-16-bit | ns-esc-32-bit )
-  //val c_ns_esc_char = "\" ~ ( ns_esc_null | ns_esc_bell | ns_esc_backspace | ns_esc_horizontal_tab | ns_esc_line_feed | ns_esc_vertical_tab | ns_esc_form_feed | ns_esc_carriage_return | ns_esc_escape | ns_esc_space | ns_esc_double_quote | ns_esc_slash | ns_esc_backslash | ns_esc_next_line | ns_esc_non_breaking_space | ns_esc_line_separator | ns_esc_paragraph_separator | ns_esc_8_bit | ns_esc_16_bit | ns_esc_32_bit )
+  //val esc_char = "\" ~ ( ns_esc_null | ns_esc_bell | ns_esc_backspace | ns_esc_horizontal_tab | ns_esc_line_feed | ns_esc_vertical_tab | ns_esc_form_feed | ns_esc_carriage_return | ns_esc_escape | ns_esc_space | ns_esc_double_quote | ns_esc_slash | ns_esc_backslash | ns_esc_next_line | ns_esc_non_breaking_space | ns_esc_line_separator | ns_esc_paragraph_separator | ns_esc_8_bit | ns_esc_16_bit | ns_esc_32_bit )
   private val ns_esc_map = Map(
     "0" -> "\u0000",
     "a" -> "\u0007",
@@ -178,12 +178,12 @@ val c_reserved = "@" | "`"
   private def st = (s:String) => {println("****<"+s+">****"); s;}
   private def sq = (s:Seq[Any]) => {println("****<"+(s.mkString)+">****"); s;}
 
-  private val c_ns_esc_char_escaped = P("\\" ~/ CharIn("0abt\tnvfre \"/\\N_LP").!.map(ns_esc_map))//.opaque("c_ns_esc_char_escaped")
-  private val c_ns_esc_char_unicode = P(
+  private val esc_char_escaped = P("\\" ~/ CharIn("0abt\tnvfre \"/\\N_LP").!.map(ns_esc_map))//.opaque("esc_char_escaped")
+  private val esc_char_unicode = P(
     "\\x" ~/ ns_hex_digit.rep(min=2,max=2).!.map(Integer.parseInt(_, 4).toChar.toString) |
     "\\u" ~/ ns_hex_digit.rep(min=4,max=4).!.map(Integer.parseInt(_, 8).toChar.toString)
   /*| "\\U" ~ hexDigit(8)*/)
-  val c_ns_esc_char:Parser[String] = P(c_ns_esc_char_escaped | c_ns_esc_char_unicode)//.opaque("c_ns_esc_char")
+  val esc_char:Parser[String] = P(esc_char_escaped | esc_char_unicode)//.opaque("esc_char")
    
 
 
@@ -248,22 +248,22 @@ val c_reserved = "@" | "`"
   // [98]    c-verbatim-tag                     ::= "!" "<" ns-uri-char+ ">"
   // [99]    c-ns-shorthand-tag                 ::= c-tag-handle ns-tag-char+
   // [100]   c-non-specific-tag                 ::= "!"
-  val c_ns_tag_property = ("!<" ~/ ns_uri_char.rep(1) ~ ">") | (c_tag_handle ~ ns_tag_char.rep(1)) | "!"
+  val tag_property = ("!<" ~/ ns_uri_char.rep(1) ~ ">") | (c_tag_handle ~ ns_tag_char.rep(1)) | "!"
 
   //[102]   ns-anchor-char                     ::= ns-char - c-flow-indicator
   //[103]   ns-anchor-name                     ::= ns-anchor-char+
   lazy val ns_anchor_name = ns_char_c_flow_indicator.rep(1)
   //[101]   c-ns-anchor-property               ::= "&" ns-anchor-name
-  val c_ns_anchor_property = P("&" ~ ns_anchor_name).map(_=>throw new UnsupportedOperationException("c_ns_anchor_property"))
+  val anchor_property = P("&" ~ ns_anchor_name).map(_=>throw new UnsupportedOperationException("anchor"))
   //[104]   c-ns-alias-node                    ::= "*" ns-anchor-name
-  val alias_node = P("*" ~ ns_anchor_name).map(_=>throw new UnsupportedOperationException("c_ns_anchor_property"))
+  val alias_node = P("*" ~ ns_anchor_name).map(_=>throw new UnsupportedOperationException("alias"))
 
   //[105]   e-scalar                           ::= /* Empty */
   val e_scalar:Parser[String] = Pass.map(Unit=>"")
   //[106]   e-node                             ::= e-scalar
   val e_node = e_scalar
   //[107]   nb-double-char                     ::= c-ns-esc-char | ( nb-json - "\" - """ )
-  val nb_double_char:Parser[String] = c_ns_esc_char | ( !(CharIn("\\-\"")) ~ nb_json  )
+  val nb_double_char:Parser[String] = esc_char | ( !(CharIn("\\-\"")) ~ nb_json  )
   //[108]   ns-double-char                     ::= nb-double-char - s-white
   val ns_double_char = !(s_white) ~ nb_double_char
 
@@ -409,13 +409,13 @@ class YamlParser (val indentation:Int, val context:Context) {
   //private lazy val separate_lines = ( comments ~ s_flow_line_prefix ) | separate_in_line
 
   //[96]    c-ns-properties(n,c)               ::= ( c-ns-tag-property ( s-separate(n,c) c-ns-anchor-property )? ) | ( c-ns-anchor-property ( s-separate(n,c) c-ns-tag-property )? )
-  val properties:Parser[Unit] = ( c_ns_tag_property ~ ( separate ~ c_ns_anchor_property ).? ) | ( c_ns_anchor_property ~ ( separate ~ c_ns_tag_property ).? )
+  val properties:Parser[Unit] = ( tag_property ~ ( separate ~ anchor_property ).? ) | ( anchor_property ~ ( separate ~ tag_property ).? )
 
   lazy val quoted:Parser[String] = {
     val break = (s_white_rep ~ b_non_content ~ s_white_rep)
     val pbreak = break.!.rep(min=2).map(s=>"\n" * (s.length-1))
     val lbreak = break.map(n=> " ")
-    val c_single_quoted = {
+    val single_quoted = {
       //[121]   nb-single-text(n,c)                ::= c = flow-out  ⇒ nb-single-multi-line(n)
       //                                               c = flow-in   ⇒ nb-single-multi-line(n)
       //                                               c = block-key ⇒ nb-single-one-line
@@ -430,13 +430,14 @@ class YamlParser (val indentation:Int, val context:Context) {
         }
         case BlockKey | FlowKey => 
           (CharIn('\u0021' to '\u0026','\u0028' to '\uFFFF',List('\t',' ')).rep(1).! | P("''").map(Unit=>"'")).rep.map(_.mkString).opaque("nb_single_one_line")
+        //case BlockOut | BlockIn  => Fail
       }
       //[120]   c-single-quoted(n,c)               ::= "'" nb-single-text(n,c) "'"
       "'" ~/ nb_single_text ~ "'"
     }
 
     //[109]   c-double-quoted(n,c)               ::= """ nb-double-text(n,c) """
-    val c_double_quoted:Parser[String] = {
+    val double_quoted:Parser[String] = {
       //[110]   nb-double-text(n,c)                ::= c = flow-out  ⇒ nb-double-multi-line(n)
       //                                               c = flow-in   ⇒ nb-double-multi-line(n)
       //                                               c = block-key ⇒ nb-double-one-line
@@ -444,17 +445,18 @@ class YamlParser (val indentation:Int, val context:Context) {
       val nb_double_text = context match {
         case FlowOut  | FlowIn  => {
           val double_char = CharIn(List('\u0021'),'\u0023' to '\u005B','\u005D' to '\uFFFF')
-          val x:Parser[String] = (double_char.rep(1).! | c_ns_esc_char | pbreak | lbreak | s_white_rep1.!)
+          val x:Parser[String] = (double_char.rep(1).! | esc_char | pbreak | lbreak | s_white_rep1.!)
           val double_line:Parser[String] = x.rep.map(_.mkString).opaque("double_line");
           (( pbreak | lbreak | s_white_rep.! ) ~ double_line).map(mkString)
         }
         case BlockKey | FlowKey =>
-          (CharIn(List('\t','\u0021','\u0020'),'\u0023' to '\u005B','\u005D' to '\uFFFF').rep(1).! | c_ns_esc_char).rep.map(_.mkString).opaque("nb_double_one_line")
+          (CharIn(List('\t','\u0021','\u0020'),'\u0023' to '\u005B','\u005D' to '\uFFFF').rep(1).! | esc_char).rep.map(_.mkString).opaque("nb_double_one_line")
+        //case BlockOut | BlockIn  => Fail
       }
       "\"" ~/ nb_double_text ~ "\""
     }
 
-    c_single_quoted | c_double_quoted
+    single_quoted | double_quoted
   }
 
   //[127]   ns-plain-safe(c)                   ::= c = flow-out  ⇒ ns-plain-safe-out
@@ -464,6 +466,7 @@ class YamlParser (val indentation:Int, val context:Context) {
   lazy val plain_safe = context match {
     case FlowOut | BlockKey => ns_plain_safe_out
     case FlowIn  | FlowKey  => ns_plain_safe_in
+    //case BlockOut| BlockIn  => Fail
   }
 
 
@@ -488,6 +491,7 @@ class YamlParser (val indentation:Int, val context:Context) {
     context match {
       case FlowOut  | FlowIn  => (ns_plain_one_line ~ s_ns_plain_next_line.rep.map(_.mkString)).map(mkString)
       case BlockKey | FlowKey => ns_plain_one_line
+      //case BlockOut | BlockIn  => Fail
     }
   })//.log("plain")
 
@@ -498,60 +502,84 @@ class YamlParser (val indentation:Int, val context:Context) {
   lazy val in_flow = context match {
     case FlowOut | FlowIn => FlowIn
     case BlockKey | FlowKey => FlowKey
+    //case BlockOut | BlockIn  => context
   }
-/*
-  //[137]   c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
-  val c_flow_sequence = "[" ~ separate.? ~ P(Y(in_flow).ns_s_flow_seq_entries).? ~ "]"
-  //[138]   ns-s-flow-seq-entries(n,c)         ::= ns-flow-seq-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-seq-entries(n,c)? )?
-  val ns_s_flow_seq_entries = ns_flow_seq_entry.rep(sep=(separate.? ~ "," ~ separate.?)).! ~ separate.?
-  //[139]   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
-  val ns_flow_seq_entry = ns_flow_pair | ns_flow_node
-  //[140]   c-flow-mapping(n,c)                ::= "{" s-separate(n,c)? ns-s-flow-map-entries(n,in-flow(c))? "}"
-  val c_flow_mapping = "{" ~ separate.? ~ P(Y(in_flow).ns_s_flow_map_entries).? ~ "}"
-  //[141]   ns-s-flow-map-entries(n,c)         ::= ns-flow-map-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-map-entries(n,c)? )?
-  val ns_s_flow_map_entries = (ns_flow_map_entry ~ separate.? ~ ( "," ~ separate.? ~ ns_s_flow_map_entries.? ).?)
-  //[142]   ns-flow-map-entry(n,c)             ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-map-implicit-entry(n,c)
-  val ns_flow_map_entry = ( "?" ~ separate ~ ns_flow_map_explicit_entry ) | ns_flow_map_implicit_entry
-  //[143]   ns-flow-map-explicit-entry(n,c)    ::= ns-flow-map-implicit-entry(n,c) | ( e-node /* Key */ e-node /* Value */ )
-  val ns_flow_map_explicit_entry = ns_flow_map_implicit_entry | ( e_node.! ~ e_node.! )
-  //[144]   ns-flow-map-implicit-entry(n,c)    ::= ns-flow-map-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-map-json-key-entry(n,c)
-  val ns_flow_map_implicit_entry = ns_flow_map_yaml_key_entry | c_ns_flow_map_empty_key_entry | c_ns_flow_map_json_key_entry
-  //[145]   ns-flow-map-yaml-key-entry(n,c)    ::= ns-flow-yaml-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-separate-value(n,c) ) | e-node )
-  val ns_flow_map_yaml_key_entry = ns_flow_yaml_node ~ ( ( separate.? ~ c_ns_flow_map_separate_value ) | e_node.! )
-  //[146]   c-ns-flow-map-empty-key-entry(n,c) ::= e-node /* Key */ c-ns-flow-map-separate-value(n,c)
-  val c_ns_flow_map_empty_key_entry = e_node ~ c_ns_flow_map_separate_value
-  //[147]   c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
-  val c_ns_flow_map_separate_value = ":" ~ !ns_plain_safe ~ ( ( separate ~ ns_flow_node ) | e_node )
-  //[148]   c-ns-flow-map-json-key-entry(n,c)  ::= c-flow-json-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-adjacent-value(n,c) ) | e-node )
-  val c_ns_flow_map_json_key_entry = c_flow_json_node ~ ( ( separate.? ~ c_ns_flow_map_adjacent_value ) | e_node )
-  //[149]   c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
-  val c_ns_flow_map_adjacent_value = ":" ~ ( ( separate.? ~ ns_flow_node ) | e_node )
 
-  //[150]   ns-flow-pair(n,c)                  ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
-  val ns_flow_pair = ( "?" ~ separate ~ ns_flow_map_explicit_entry ) | ns_flow_pair_entry
-  //[151]   ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
-  val ns_flow_pair_entry = ns_flow_pair_yaml_key_entry | c_ns_flow_map_empty_key_entry | c_ns_flow_pair_json_key_entry
-  //[152]   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
-  val ns_flow_pair_yaml_key_entry = Y(0,FlowKey).ns_s_implicit_yaml_key ~ c_ns_flow_map_separate_value
-  //[153]   c-ns-flow-pair-json-key-entry(n,c) ::= c-s-implicit-json-key(flow-key) c-ns-flow-map-adjacent-value(n,c)
-  val c_ns_flow_pair_json_key_entry = Y(0,FlowKey).c_s_implicit_json_key ~ c_ns_flow_map_adjacent_value
+  //[137]   c-flow-sequence(n,c)               ::= "[" s-separate(n,c)? ns-s-flow-seq-entries(n,in-flow(c))? "]"
+  //[138]   ns-s-flow-seq-entries(n,c)         ::= ns-flow-seq-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-seq-entries(n,c)? )?
+  val flow_sequence = "[" ~ separate.? ~ P(apply(in_flow).flow_seq_entries).? ~ "]"
+  lazy val flow_seq_entries:Parser[Seq[AnyRef]] = {
+    //[151]   ns-flow-pair-entry(n,c)            ::= ns-flow-pair-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-pair-json-key-entry(n,c)
+    // [152]   ns-flow-pair-yaml-key-entry(n,c)   ::= ns-s-implicit-yaml-key(flow-key) c-ns-flow-map-separate-value(n,c)
+    // [153]   c-ns-flow-pair-json-key-entry(n,c) ::= c-s-implicit-json-key(flow-key) c-ns-flow-map-adjacent-value(n,c)
+    val flowKey = YamlParser(0,FlowKey)
+    val ns_flow_pair_yaml_key_entry = flowKey.implicit_yaml_key ~ flow_map_separate_value
+    val flow_pair_json_key_entry = flowKey.implicit_json_key ~ flow_map_adjacent_value
+    val flow_pair_entry = ns_flow_pair_yaml_key_entry | flow_map_empty_key_entry | flow_pair_json_key_entry
+
+
+    //[139]   ns-flow-seq-entry(n,c)             ::= ns-flow-pair(n,c) | ns-flow-node(n,c)
+    //[150]   ns-flow-pair(n,c)                  ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-pair-entry(n,c)
+    val ns_flow_pair = flow_map_explicit_entry | flow_pair_entry
+    val flow_seq_entry = flow_pair | flow_node
+
+    flow_seq_entry.rep(sep=(separate.? ~ "," ~ separate.?)) ~ separate.?
+  }
+
+  //[140]   c-flow-mapping(n,c)                ::= "{" s-separate(n,c)? ns-s-flow-map-entries(n,in-flow(c))? "}"
+  lazy val flow_mapping = "{" ~ separate.? ~ P(apply(in_flow).flow_map_entries).? ~ "}"
+
+  //[141]   ns-s-flow-map-entries(n,c)         ::= ns-flow-map-entry(n,c) s-separate(n,c)? ( "," s-separate(n,c)? ns-s-flow-map-entries(n,c)? )?
+  // [142]   ns-flow-map-entry(n,c)             ::= ( "?" s-separate(n,c) ns-flow-map-explicit-entry(n,c) ) | ns-flow-map-implicit-entry(n,c)
+  lazy val flow_map_entries:Parser[Seq[(AnyRef,AnyRef)]] = (flow_map_explicit_entry | flow_map_implicit_entry).rep(sep=(separate.? ~ "," ~ separate.?)) ~ separate.?
+
+  //[143]   ns-flow-map-explicit-entry(n,c)    ::= ns-flow-map-implicit-entry(n,c) | ( e-node /* Key */ e-node /* Value */ )
+  lazy val flow_map_explicit_entry =  "?" ~ separate ~ (flow_map_implicit_entry | ( e_node ~ e_node ))
+
+  //[144]   ns-flow-map-implicit-entry(n,c)    ::= ns-flow-map-yaml-key-entry(n,c) | c-ns-flow-map-empty-key-entry(n,c) | c-ns-flow-map-json-key-entry(n,c)
+  lazy val flow_map_implicit_entry = {
+    //[145]   ns-flow-map-yaml-key-entry(n,c)    ::= ns-flow-yaml-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-separate-value(n,c) ) | e-node )
+    val flow_map_yaml_key_entry = yaml_node ~ ( ( separate.? ~ flow_map_separate_value ) | e_node.! )
+
+    flow_map_yaml_key_entry | flow_map_empty_key_entry | flow_map_json_key_entry
+  }
+
+  //[146]   c-ns-flow-map-empty-key-entry(n,c) ::= e-node /* Key */ c-ns-flow-map-separate-value(n,c)
+  lazy val flow_map_empty_key_entry = e_node ~ flow_map_separate_value
+
+  //[147]   c-ns-flow-map-separate-value(n,c)  ::= ":" /* Not followed by an ns-plain-safe(c) */ ( ( s-separate(n,c) ns-flow-node(n,c) ) | e-node /* Value */ )
+  lazy val flow_map_separate_value = ":" ~ !plain_safe ~ ( ( separate ~ flow_node ) | e_node )
+
+  //[148]   c-ns-flow-map-json-key-entry(n,c)  ::= c-flow-json-node(n,c) ( ( s-separate(n,c)? c-ns-flow-map-adjacent-value(n,c) ) | e-node )
+  val low_map_json_key_entry = c_flow_json_node ~ ( ( separate.? ~ flow_map_adjacent_value ) | e_node )
+  //[149]   c-ns-flow-map-adjacent-value(n,c)  ::= ":" ( ( s-separate(n,c)? ns-flow-node(n,c) ) | e-node ) /* Value */
+  val flow_map_adjacent_value = ":" ~ ( ( separate.? ~ ns_flow_node ) | e_node )
+
+
   //[154]   ns-s-implicit-yaml-key(c)          ::= ns-flow-yaml-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-  val ns_s_implicit_yaml_key = (ns_flow_yaml_node ~ separate_in_line.?) //TODO: At most 1024 characters altogether
+  private val implicit_yaml_key = (yaml_node ~ separate_in_line.?)
   //[155]   c-s-implicit-json-key(c)           ::= c-flow-json-node(n/a,c) s-separate-in-line? /* At most 1024 characters altogether */
-  val c_s_implicit_json_key = (c_flow_json_node ~ separate_in_line.?)
+  private val implicit_json_key = Fail//(c_flow_json_node ~ separate_in_line.?)
+  
+
   //[156]   ns-flow-yaml-content(n,c)          ::= ns-plain(n,c)
-  val ns_flow_yaml_content:Parser[String] = ns_plain
+  lazy val yaml_content:Parser[String] = plain
   //[157]   c-flow-json-content(n,c)           ::= c-flow-sequence(n,c) | c-flow-mapping(n,c) | c-single-quoted(n,c) | c-double-quoted(n,c)
-  val c_flow_json_content = c_flow_sequence | c_flow_mapping | c_single_quoted | c_double_quoted
-  //[158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
-  val ns_flow_content = ns_flow_yaml_content | c_flow_json_content
+  lazy val json_content = flow_sequence | flow_mapping | quoted
+
   //[159]   ns-flow-yaml-node(n,c)             ::= c-ns-alias-node | ns-flow-yaml-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-yaml-content(n,c) ) | e-scalar ) )
-  val ns_flow_yaml_node = c_ns_alias_node | ns_flow_yaml_content | ( c_ns_properties ~ ( ( separate ~ ns_flow_yaml_content ) | e_scalar ) )
+  lazy val yaml_node = alias_node | yaml_content | ( properties ~ ( ( separate ~ yaml_content ) | e_scalar ) )
+/*
   //[160]   c-flow-json-node(n,c)              ::= ( c-ns-properties(n,c) s-separate(n,c) )? c-flow-json-content(n,c)
-  val c_flow_json_node = ( c_ns_properties ~ separate ).? ~ c_flow_json_content
+  val c_flow_json_node = ( properties ~ separate ).? ~ c_flow_json_content
   //[161]   ns-flow-node(n,c)                  ::= c-ns-alias-node | ns-flow-content(n,c) | ( c-ns-properties(n,c) ( ( s-separate(n,c) ns-flow-content(n,c) ) | e-scalar ) )
-  val ns_flow_node = c_ns_alias_node | ns_flow_content | ( c_ns_properties ~ ( ( separate ~ ns_flow_content ) | e_scalar ) )
  */
+  lazy val flow_node = {
+    //[158]   ns-flow-content(n,c)               ::= ns-flow-yaml-content(n,c) | c-flow-json-content(n,c)
+    val flow_content = yaml_content | json_content
+    alias_node | flow_content | ( properties ~ ( ( separate ~ flow_content ) | e_scalar ) )
+  }
+
 
   //[162]   c-b-block-header(m,t)              ::= ( ( c-indentation-indicator(m) c-chomping-indicator(t) ) | ( c-chomping-indicator(t) c-indentation-indicator(m) ) ) s-b-comment
 
@@ -580,67 +608,64 @@ class YamlParser (val indentation:Int, val context:Context) {
     block_header.map(BlockScalar).~/ //.log("c_b_block_header")
   }
 
-/*
+
   //[185]   s-l+block-indented(n,c)            ::= ( s-indent(m) ( ns-l-compact-sequence(n+1+m) | ns-l-compact-mapping(n+1+m) ) ) | s-l+block-node(n,c) | ( e-node s-l-comments )
-  private val s_l_block_indented_compact = ns_l_compact_sequence | ns_l_compact_mapping
-  private def s_l_block_indented(c:Context) = s_indent_any.flatMap((i:Int)=>YamlParser(indentation+1+i,c).s_l_block_indented_compact) //TODO:| P(block_node) | ( e_node ~ comments )
+  // [186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
+  // [195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
+  private lazy val compact_collection = block_seq_entries | block_map_entries
+  private val block_indented:Parser[AnyRef] =
+    indent_any.flatMap((m:Int)=> apply(indentation + 1 + m).compact_collection) |
+    P(block_node) |
+    ( e_node ~ comments )
 
   //[184]   c-l-block-seq-entry(n)             ::= "-" /* Not followed by an ns-char */ s-l+block-indented(n,block-in)
-  private val block_seq_entries = ("-" ~ !(ns_char) ~/ s_l_block_indented(BlockIn)).rep(1)
-
+  private val block_seq_entries = ("-" ~ s_char ~ block_indented).rep(min=1,sep=indent)
   //[183]   l+block-sequence(n)                ::= ( s-indent(n+m) c-l-block-seq-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-  val l_block_sequence = s_indent_more.flatMap((i:Int)=>apply(i).block_seq_entries)
-*/
+  private lazy val block_sequence  = seq_spaces.flatMap((n:Int)=>YamlParser(n,BlockIn).block_seq_entries)
 
-/*
-  //[186]   ns-l-compact-sequence(n)           ::= c-l-block-seq-entry(n) ( s-indent(n) c-l-block-seq-entry(n) )*
-  val ns_l_compact_sequence = c_l_block_seq_entry.rep(min=1,sep=s_indent)
+
   //[187]   l+block-mapping(n)                 ::= ( s-indent(n+m) ns-l-block-map-entry(n+m) )+ /* For some fixed auto-detected m > 0 */
-  val l_block_mapping = s_indent_more.flatMap(Y(_,context).ns_l_block_map_entry.rep(1))
-  //[188]   ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
-  val ns_l_block_map_entry = c_l_block_map_explicit_entry | ns_l_block_map_implicit_entry
-  //[189]   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
-  val c_l_block_map_explicit_entry = c_l_block_map_explicit_key ~ ( l_block_map_explicit_value | e_node )
-  //[190]   c-l-block-map-explicit-key(n)      ::= "?" s-l+block-indented(n,block-out)
-  val c_l_block_map_explicit_key = "?" ~ s_l_block_indented(BlockOut)
-  //[191]   l-block-map-explicit-value(n)      ::= s-indent(n) ":" s-l+block-indented(n,block-out)
-  val l_block_map_explicit_value = s_indent ~ ":" ~  s_l_block_indented(BlockOut)
-  //[192]   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
-  val ns_l_block_map_implicit_entry = ( ns_s_block_map_implicit_key | e_node ) ~ c_l_block_map_implicit_value
-  //[193]   ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
-  val ns_s_block_map_implicit_key_impl = (c_s_implicit_json_key | ns_s_implicit_yaml_key)
-  val ns_s_block_map_implicit_key = P(Y(0,BlockKey).ns_s_block_map_implicit_key_impl)
+  private val block_mapping = indent_more.flatMap((n:Int)=>apply(n).block_map_entries)
+  private val block_map_entries = {
+    //[189]   c-l-block-map-explicit-entry(n)    ::= c-l-block-map-explicit-key(n) ( l-block-map-explicit-value(n) | e-node )
+    //[190]   c-l-block-map-explicit-key(n)      ::= "?" s-l+block-indented(n,block-out)
+    //[191]   l-block-map-explicit-value(n)      ::= s-indent(n) ":" s-l+block-indented(n,block-out)
+    val blockOut = apply(BlockOut)
+    val explicit_key = "?" ~ blockOut.block_indented
+    val explicit_value = indent ~ ":" ~  blockOut.block_indented
+    val explicit_entry = explicit_key ~ ( explicit_value | e_node )
 
-  //[194]   c-l-block-map-implicit-value(n)    ::= ":" ( s-l+block-node(n,block-out) | ( e-node s-l-comments ) )
-  val c_l_block_map_implicit_value = ":" ~ ( P(Y(BlockOut).s_l_block_node) | ( e_node ~ comments ) )
-  //[195]   ns-l-compact-mapping(n)            ::= ns-l-block-map-entry(n) ( s-indent(n) ns-l-block-map-entry(n) )*
-  val ns_l_compact_mapping = ns_l_block_map_entry ~ ( s_indent ~ ns_l_block_map_entry ).rep
+    //[192]   ns-l-block-map-implicit-entry(n)   ::= ( ns-s-block-map-implicit-key | e-node ) c-l-block-map-implicit-value(n)
+    //[193]   ns-s-block-map-implicit-key        ::= c-s-implicit-json-key(block-key) | ns-s-implicit-yaml-key(block-key)
+    //[194]   c-l-block-map-implicit-value(n)    ::= ":" ( s-l+block-node(n,block-out) | ( e-node s-l-comments ) )
+    val blockKey = apply(BlockKey)
+    val implicit_key = blockKey.implicit_json_key | blockKey.implicit_yaml_key
+    val implicit_value = ":" ~ ( blockOut.block_node | ( e_node ~ comments ) )
+    val implicit_entry = ( implicit_key | e_node ) ~ implicit_value
 
-
+    //[188]   ns-l-block-map-entry(n)            ::= c-l-block-map-explicit-entry(n) | ns-l-block-map-implicit-entry(n)
+    (explicit_entry | implicit_entry).rep(min=1,sep=indent)
+  }
 
   //[196]   s-l+block-node(n,c)                ::= s-l+block-in-block(n,c) | s-l+flow-in-block(n)
-  private val s_l_flow_in_block_impl = separate ~ ns_flow_node ~ comments
+  private val s_l_flow_in_block_impl = Fail //separate ~ ns_flow_node ~ comments
   lazy val block_node:Parser[AnyRef] = {
     //[197]   s-l+flow-in-block(n)               ::= s-separate(n+1,flow-out) ns-flow-node(n+1,flow-out) s-l-comments
     //val s_l_flow_in_block_Optomization = &(comments | separate_in_line).flatMap(Unit=>Y(indentation+1,FlowOut).s_l_flow_in_block_impl)
     val s_l_flow_in_block = P(YamlParser(indentation+1,FlowOut).s_l_flow_in_block_impl)
 
-    //[200]   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
-    val s_l_block_collection_properties_impl = (( separate ~ c_ns_properties ).?)
-    val s_l_block_collection_properties = P(Y(indentation+1).s_l_block_collection_properties_impl)
     //val s_l_block_collection_properties_Optomization = &(comments | separate_in_line).flatMap(Unit=>Y(indentation+1).s_l_block_collection_properties_impl)
-    val l_block_sequence_seq_spaces = context match {
-      case BlockOut => YamlParser(indentation-1,BlockOut).l_block_sequence
-      case BlockIn => l_block_sequence
-    }
-    val s_l_block_collection = s_l_block_collection_properties ~ comments ~ ( l_block_sequence_seq_spaces | l_block_mapping )
+
+    //[200]   s-l+block-collection(n,c)          ::= ( s-separate(n+1,c) c-ns-properties(n+1,c) )? s-l-comments ( l+block-sequence(seq-spaces(n,c)) | l+block-mapping(n) )
+
+    val block_collection = block_collection_preamble ~ ( block_sequence | block_mapping )
 
     //[198]   s-l+block-in-block(n,c)            ::= s-l+block-scalar(n,c) | s-l+block-collection(n,c)
-    val s_l_block_in_block = P(block_scalar) | P(block_collection)
+    val s_l_block_in_block = block_scalar | block_collection
 
     s_l_block_in_block | s_l_flow_in_block
   }
- */
+
 
   //[201]   seq-spaces(n,c)                    ::= c = block-out ⇒ n-1
   //                                               c = block-in  ⇒ n
